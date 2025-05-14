@@ -169,7 +169,7 @@ for epoch in range(1, n_epochs + 1):
         optimizer.step()
 
         batch_loss += loss
-        batch_acc += acc.item()
+        batch_acc += acc
 
     if epoch % (n_epochs // 10) == 0:
         print(f"[{epoch:2d}/{n_epochs}] loss: {batch_loss/(i+1):.3f} "
