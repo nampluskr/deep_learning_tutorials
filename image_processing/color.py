@@ -1,6 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def plot_hist(ax, arr, bins=200, **kwargs):
+    data = arr.flatten()
+    ax.hist(data, bins=bins, color="gray", edgecolor="black", **kwargs)
+    ax.set_xlabel("Value")
+    ax.set_ylabel("Frequency")
+    ax.tick_params(axis='both', which='both', length=0)
+    # ax.set_xlim(0, 1)
+    ax.grid()
+    return ax
+
+def normalize(x):
+    x_min, x_max = x.min(), x.max()
+    return (x - x_min) / (x_max - x_min)
 
 def to_image(sRGB):
     """ sRGB[0, 1] to 8bit RGB[0, 255] """
@@ -70,13 +83,20 @@ def XYZ_to_sRGB(XYZ):
     return linRGB_to_sRGB(linRGB)
 
 
-def XYZ_to_Lxy(XYZ, eps=1e-8):
-    X, Y, Z = XYZ[..., 0], XYZ[..., 1], XYZ[..., 2]
-    XYZ_sum = X + Y + Z
-    x = np.where(XYZ_sum > eps, X / XYZ_sum, 0.0)
-    y = np.where(XYZ_sum > eps, Y / XYZ_sum, 0.0)
-    return np.stack([Y, x, y], axis=-1).astype(np.float32)
+def XYZ_to_Lxy(X, Y, Z):
+    eps = 1e-8
+    X = np.clip(X, 0, None)
+    Y = np.clip(Y, 0, None)
+    Z = np.clip(Z, 0, None)
 
+    XYZ_sum = X + Y + Z
+    mask = XYZ_sum > eps
+    x = np.zeros_like(X)
+    y = np.zeros_like(Y)
+    x[mask] = X[mask] / XYZ_sum[mask]
+    y[mask] = Y[mask] / XYZ_sum[mask]
+    L = Y / Y.max()
+    return L, x, y
 
 if __name__ == "__main__":
     
