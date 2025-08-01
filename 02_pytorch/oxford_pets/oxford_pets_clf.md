@@ -44,10 +44,12 @@ class OxfordPets(Dataset):
 
     def __getitem__(self, idx):
         image_path, label = self.samples[idx]
-        image = cv2.imread(image_path, cv2.COLOR_BGR2RGB)
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         if self.transform:
-            image = self.transform(image=image)["image"]
+            transforemed = self.transform(image=image)
+            image = transforemed["image"]
 
         label = torch.tensor(label).long()
         return image, label
@@ -88,9 +90,11 @@ model = model.to(device)
 
 loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+```
 
+```python
 n_epochs = 10
-for epoch in range(1, n_epochs):
+for epoch in range(1, n_epochs + 1):
     model.train()
     total_loss = 0
     for images, labels in train_loader:
