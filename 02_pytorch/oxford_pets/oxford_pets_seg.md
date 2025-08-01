@@ -92,9 +92,11 @@ model = model.to(device)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=255)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+```
 
-n_epochs = 1
-for epoch in range(1, n_epochs):
+```python
+n_epochs = 10
+for epoch in range(1, n_epochs + 1):
     model.train()
     total_loss = 0
     for images, masks in train_loader:
