@@ -72,7 +72,9 @@ class OxfordPets(Dataset):
         target = {'bboxes': torch.tensor(bboxes).float(), 
                   'labels': torch.tensor(labels).long()}
         return image, target
+```
 
+```python
 train_transform = A.Compose([
     A.Resize(320, 320),
     A.HorizontalFlip(p=0.5),
@@ -98,33 +100,5 @@ kwargs = {"num_workers": 4, "pin_memory": True,
           "drop_last": True, "persistent_workers": True}
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_fn, **kwargs)
 valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False, collate_fn=collate_fn, **kwargs)
-```
-
-```python
-train_transform = A.Compose([
-    A.Resize(224,224),
-    A.HorizontalFlip(p=0.5),
-    A.RandomBrightnessContrast(p=0.2),
-    A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ToTensorV2(),
-])
-valid_transform = A.Compose([
-    A.Resize(224,224),
-    A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-    ToTensorV2(),
-])
-
-data_dir = "/home/namu/myspace/NAMU/datasets/oxford_pets/"
-train_dataset = OxfordPets(data_dir, split="train", transform=train_transform)
-valid_dataset = OxfordPets(data_dir, split="test", transform=valid_transform)
-
-kwargs = {"num_workers": 4, "pin_memory": True, 
-          "drop_last": True, "persistent_workers": True}
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, **kwargs)
-valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False, **kwargs)
-```
-
-```python
-...
 ```
 
