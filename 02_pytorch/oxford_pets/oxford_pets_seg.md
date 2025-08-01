@@ -45,9 +45,11 @@ class OxfordPets(Dataset):
 
     def __getitem__(self, idx):
         image_path, mask_path = self.samples[idx]
-        image = cv2.imread(image_path, cv2.COLOR_BGR2RGB)   # (H, W, 3)
+        image = cv2.imread(image_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)      # (H, W, 3)
         mask = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)  # (H, W)
         mask -= 1    # 0: background 1: pet, 2: border
+        # mask[mask ==  2] = 255
 
         if self.transform:
             transforemed = self.transform(image=image, mask=mask)
@@ -81,13 +83,13 @@ valid_loader = DataLoader(valid_dataset, batch_size=16, shuffle=False, **kwargs)
 ```
 
 ```python
-from torchvision.models.segmentation import deeplabv3_resnet50
+from torchvision.models.segmentation import fcn_resnet50
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 n_classes = 3
 
-model = deeplabv3_resnet50(weights=None, weights_backbone=None)
-model.classifier[4] = nn.Conv2d(256, n_classes, kernel_size=1)
+model = fcn_resnet50(weights=None, weights_backbone=None)
+model.classifier[4] = nn.Conv2d(512, n_classes, kernel_size=1)
 model = model.to(device)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=255)
