@@ -1,0 +1,45 @@
+
+##### 프로젝트 개요
+- OLED 디스플레이의 얼룩(stain), 무라(mura) 및 화질 이상(display quality defects) 검출
+- 사람이 인지가능한 미세한 시각적 차이를 가진 anomaly 검출
+- OLED 디스플레이의 얼룩 검출은 전형적인 Anomaly Detection 문제
+- 정상 분포의 미세한 일탈에 강해야 함
+- 정상 데이터만으로 학습해야 하는 One-Class 학습 상황
+- Vanilla Simple Autoencoder부터 시작해서, SOTA Vision Anomaly Detection 모델들과 단계적 평가
+- 패턴에 의존하지 않는 다양한 콘텐츠와 휘도 조건에서의 OLED 화질 이상 검출
+- 오픈 데이터셋을 활용하여 모델 아키텍쳐와 성능 개선 평가를 진행하고, 실제 데이터 적용 평가
+
+
+##### 데이터 특성
+- 정상 데이터가 압도적으로 많고 불량이 희소하며 모양·위치·수준이 예측 불가능
+- OLED 디스플레이에 따라 해상도 (height, width)가 다름
+- 정상 데이터 중심의 불균형 데이터 환경 대응
+- 극도로 불균형한 데이터 분포 (정상 >> 불량)
+- 불량 데이터의 형태, 위치, 수준(강도) 예측 불가
+- 구조적, 저주파, 고주파 무라를 포함
+- 측정 데이터는 특정 폴더에 저장되어 있고 실시간 처리 이슈 없음
+
+#### 추가 정보
+- 사용자는 Computer Vision 연구자로 PyTorch를 사용
+- 기술적으로 깊이 있는 설명을 필요함
+
+#### 모델 개발 단계
+
+1. Baseline 모델 구축 - Vanilla CNN Autoencoder
+  - Encoder-Decoder 아키텍처 설계
+  - Reconstruction loss 기반 anomaly detection
+  - 하이퍼파라미터 최적화
+
+Vanila CNN Autoencoder 를 사용하여, MVTec 데이터셋의 카테고리별 Anomaly Detection 성능을 도출하고, 시각화하는 프로세스를 단계별 상세 psedo 코드 형태로 작성해 주세요.
+(실제 파이썬 코드는 추가 요청)
+
+[예시]
+- 이미지 데이터 Augmentation 정의: train / test transform
+- MVTec Dataset 정의: train / valid / test dataset
+- dataloader 정의: train / valid / test dataloader
+- Vanila Autoencoder 정의: encoder / decoder
+- loss / metric 함수 정의
+- 정상 데이터 만으로 학습: training + validation + early stopping + learning rate 스케쥴링
+- 테스트 데이터를 대상으로 카테고리별 성능 평가
+- 특정 케테고리별 정상/불량 이미지 예시 시각화
+
