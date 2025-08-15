@@ -16,7 +16,8 @@ from copy import deepcopy
 from utils import define_loss_and_metrics
 
 
-def get_device(seed=42):
+def set_device(seed=42):
+    """디바이스 설정 및 시드 고정"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     random.seed(seed)
     np.random.seed(seed)
@@ -32,18 +33,32 @@ def get_device(seed=42):
     if torch.cuda.is_available():
         print(f">> GPU: {torch.cuda.get_device_name(0)}")
 
-    return device
 
-
-def train_epoch(model, train_loader, criterion, optimizer, device, 
-                calculate_psnr, calculate_ssim):
+def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
+    """
+    한 에포크 훈련
+    
+    Args:
+        model: 훈련할 모델
+        data_loader: 훈련 데이터로더
+        criterion: 손실 함수
+        optimizer: 옵티마이저
+        metrics: 추가 메트릭 함수들의 딕셔너리 {"metric_name": metric_function}
+    
+    Returns:
+        dict: {"loss": loss_value, "metric_name": metric_value, ...}
+    """
+    device = next(model.parameters()).device
     model.train()
-    total_loss = 0.0
-    total_psnr = 0.0
-    total_ssim = 0.0
+    
+    # 결과 저장용 딕셔너리 초기화
+    total_results = {"loss": 0.0}
+    for metric_name in metrics.keys():
+        total_results[metric_name] = 0.0
+    
     num_batches = 0
     
-    progress_bar = tqdm(train_loader, desc="Training", leave=False)
+    progress_bar = tqdm(data_loader, desc="Training", leave=False)
     
     for batch in progress_bar:
         images = batch['image'].to(device)
@@ -69,40 +84,64 @@ def train_epoch(model, train_loader, criterion, optimizer, device,
         optimizer.step()
         
         # 메트릭 계산
-        with torch.no_grad():
-            psnr = calculate_psnr(reconstructed, normal_images_norm)
-            ssim_val = calculate_ssim(reconstructed, normal_images_norm)
+        batch_results = {"loss": loss.item()}
         
-        total_loss += loss.item()
-        total_psnr += psnr.item()
-        total_ssim += ssim_val.item()
+        with torch.no_grad():
+            for metric_name, metric_fn in metrics.items():
+                try:
+                    metric_value = metric_fn(reconstructed, normal_images_norm)
+                    if isinstance(metric_value, torch.Tensor):
+                        metric_value = metric_value.item()
+                    batch_results[metric_name] = metric_value
+                except Exception as e:
+                    print(f"Warning: Error calculating {metric_name}: {e}")
+                    batch_results[metric_name] = 0.0
+        
+        # 누적 결과 업데이트
+        for key, value in batch_results.items():
+            total_results[key] += value
+        
         num_batches += 1
         
         # 진행 상황 업데이트
-        progress_bar.set_postfix({
-            'Loss': f'{loss.item():.4f}',
-            'PSNR': f'{psnr.item():.2f}',
-            'SSIM': f'{ssim_val.item():.3f}'
-        })
+        avg_results = {key: value / num_batches for key, value in total_results.items()}
+        progress_info = {f'{key.capitalize()}': f'{value:.4f}' for key, value in avg_results.items()}
+        progress_bar.set_postfix(progress_info)
     
-    avg_loss = total_loss / num_batches if num_batches > 0 else 0
-    avg_psnr = total_psnr / num_batches if num_batches > 0 else 0
-    avg_ssim = total_ssim / num_batches if num_batches > 0 else 0
+    # 평균 계산
+    if num_batches > 0:
+        avg_results = {key: value / num_batches for key, value in total_results.items()}
+    else:
+        avg_results = {key: 0.0 for key in total_results.keys()}
     
-    return avg_loss, avg_psnr, avg_ssim
+    return avg_results
 
 
-def validate_epoch(model, valid_loader, criterion, device, 
-                  calculate_psnr, calculate_ssim):
-    """한 에포크 검증"""
+def validate_epoch(model, data_loader, criterion, metrics={}):
+    """
+    한 에포크 검증
+    
+    Args:
+        model: 검증할 모델
+        data_loader: 검증 데이터로더
+        criterion: 손실 함수
+        metrics: 추가 메트릭 함수들의 딕셔너리 {"metric_name": metric_function}
+    
+    Returns:
+        dict: {"loss": loss_value, "metric_name": metric_value, ...}
+    """
+    device = next(model.parameters()).device
     model.eval()
-    total_loss = 0.0
-    total_psnr = 0.0
-    total_ssim = 0.0
+    
+    # 결과 저장용 딕셔너리 초기화
+    total_results = {"loss": 0.0}
+    for metric_name in metrics.keys():
+        total_results[metric_name] = 0.0
+    
     num_batches = 0
     
     with torch.no_grad():
-        for batch in valid_loader:
+        for batch in data_loader:
             images = batch['image'].to(device)
             labels = batch['label'].to(device)
             
@@ -119,33 +158,68 @@ def validate_epoch(model, valid_loader, criterion, device,
             # 정규화
             normal_images_norm = (normal_images - normal_images.min()) / (normal_images.max() - normal_images.min() + 1e-8)
             
-            # 메트릭 계산
+            # Loss 계산
             loss = criterion(reconstructed, normal_images_norm)
-            psnr = calculate_psnr(reconstructed, normal_images_norm)
-            ssim_val = calculate_ssim(reconstructed, normal_images_norm)
+            batch_results = {"loss": loss.item()}
             
-            total_loss += loss.item()
-            total_psnr += psnr.item()
-            total_ssim += ssim_val.item()
+            # 메트릭 계산
+            for metric_name, metric_fn in metrics.items():
+                try:
+                    metric_value = metric_fn(reconstructed, normal_images_norm)
+                    if isinstance(metric_value, torch.Tensor):
+                        metric_value = metric_value.item()
+                    batch_results[metric_name] = metric_value
+                except Exception as e:
+                    print(f"Warning: Error calculating {metric_name}: {e}")
+                    batch_results[metric_name] = 0.0
+            
+            # 누적 결과 업데이트
+            for key, value in batch_results.items():
+                total_results[key] += value
+            
             num_batches += 1
     
-    avg_loss = total_loss / num_batches if num_batches > 0 else 0
-    avg_psnr = total_psnr / num_batches if num_batches > 0 else 0
-    avg_ssim = total_ssim / num_batches if num_batches > 0 else 0
+    # 평균 계산
+    if num_batches > 0:
+        avg_results = {key: value / num_batches for key, value in total_results.items()}
+    else:
+        avg_results = {key: 0.0 for key in total_results.keys()}
     
-    return avg_loss, avg_psnr, avg_ssim
+    return avg_results
 
 
-def train_model(model, train_loader, valid_loader, device, num_epochs=50):
-    """전체 훈련 루프 (Early Stopping 포함)"""
+def train_model(model, train_loader, valid_loader, num_epochs=50, metrics={}):
+    """
+    전체 훈련 루프 (Early Stopping 포함)
+    
+    Args:
+        model: 훈련할 모델
+        train_loader: 훈련 데이터로더
+        valid_loader: 검증 데이터로더
+        num_epochs: 훈련 에포크 수
+        metrics: 추가 메트릭 함수들의 딕셔너리
+    
+    Returns:
+        tuple: (trained_model, history)
+    """
+    
+    # 모델로부터 디바이스 추출
+    device = next(model.parameters()).device
     
     # 손실 함수와 메트릭 정의
     criterion, calculate_psnr, calculate_ssim, _ = define_loss_and_metrics()
     
+    # 기본 메트릭이 제공되지 않은 경우 추가
+    if not metrics:
+        metrics = {
+            "psnr": calculate_psnr,
+            "ssim": calculate_ssim
+        }
+    
     # 옵티마이저 및 스케줄러 설정
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=5, verbose=True
+        optimizer, mode='min', factor=0.5, patience=5
     )
     
     # Early stopping 설정
@@ -154,11 +228,12 @@ def train_model(model, train_loader, valid_loader, device, num_epochs=50):
     patience = 10
     best_model_state = None
     
-    # 훈련 기록
-    history = {
-        'train_loss': [], 'train_psnr': [], 'train_ssim': [],
-        'valid_loss': [], 'valid_psnr': [], 'valid_ssim': []
-    }
+    # 훈련 기록 초기화
+    history = {}
+    # 모든 메트릭에 대해 train/valid 기록 준비
+    for key in ["loss"] + list(metrics.keys()):
+        history[f'train_{key}'] = []
+        history[f'valid_{key}'] = []
     
     print("Starting training...")
     
@@ -166,43 +241,46 @@ def train_model(model, train_loader, valid_loader, device, num_epochs=50):
         start_time = time.time()
         
         # 훈련 단계
-        train_loss, train_psnr, train_ssim = train_epoch(
-            model, train_loader, criterion, optimizer, device, 
-            calculate_psnr, calculate_ssim
-        )
+        train_results = train_epoch(model, train_loader, criterion, optimizer, metrics)
         
         # 검증 단계
-        valid_loss, valid_psnr, valid_ssim = validate_epoch(
-            model, valid_loader, criterion, device, 
-            calculate_psnr, calculate_ssim
-        )
+        valid_results = validate_epoch(model, valid_loader, criterion, metrics)
         
-        # 스케줄러 업데이트
-        scheduler.step(valid_loss)
+        # 스케줄러 업데이트 및 학습률 모니터링
+        old_lr = optimizer.param_groups[0]['lr']
+        scheduler.step(valid_results['loss'])
+        new_lr = optimizer.param_groups[0]['lr']
+        
+        # 학습률 변경 감지
+        if new_lr != old_lr:
+            print(f"Learning rate reduced: {old_lr:.6f} -> {new_lr:.6f}")
         
         # 기록 저장
-        history['train_loss'].append(train_loss)
-        history['train_psnr'].append(train_psnr)
-        history['train_ssim'].append(train_ssim)
-        history['valid_loss'].append(valid_loss)
-        history['valid_psnr'].append(valid_psnr)
-        history['valid_ssim'].append(valid_ssim)
+        for key in train_results.keys():
+            history[f'train_{key}'].append(train_results[key])
+            history[f'valid_{key}'].append(valid_results[key])
         
         # Early stopping 체크
-        if valid_loss < best_valid_loss:
-            best_valid_loss = valid_loss
+        if valid_results['loss'] < best_valid_loss:
+            best_valid_loss = valid_results['loss']
             patience_counter = 0
             best_model_state = deepcopy(model.state_dict())
-            print(f"✓ New best model saved (Valid Loss: {valid_loss:.4f})")
+            print(f"✓ New best model saved (Valid Loss: {valid_results['loss']:.4f})")
         else:
             patience_counter += 1
         
         # 진행 상황 출력
         epoch_time = time.time() - start_time
+        current_lr = optimizer.param_groups[0]['lr']
+        
+        # 훈련 결과 문자열
+        train_str = ', '.join([f'{k.capitalize()}={v:.4f}' for k, v in train_results.items()])
+        valid_str = ', '.join([f'{k.capitalize()}={v:.4f}' for k, v in valid_results.items()])
+        
         print(f"Epoch {epoch:2d}/{num_epochs} | "
-              f"Train: Loss={train_loss:.4f}, PSNR={train_psnr:.2f}, SSIM={train_ssim:.3f} | "
-              f"Valid: Loss={valid_loss:.4f}, PSNR={valid_psnr:.2f}, SSIM={valid_ssim:.3f} | "
-              f"Time: {epoch_time:.1f}s")
+              f"Train: {train_str} | "
+              f"Valid: {valid_str} | "
+              f"LR={current_lr:.6f} | Time: {epoch_time:.1f}s")
         
         # Early stopping 적용
         if patience_counter >= patience:
@@ -217,11 +295,23 @@ def train_model(model, train_loader, valid_loader, device, num_epochs=50):
     return model, history
 
 
-def evaluate_model(model, test_loader, device):
-    """테스트 데이터셋 평가"""
+def evaluate_model(model, test_loader):
+    """
+    테스트 데이터셋 평가
+    
+    Args:
+        model: 평가할 모델
+        test_loader: 테스트 데이터로더
+    
+    Returns:
+        tuple: (results, detailed_results)
+    """
     
     # 메트릭 함수 가져오기
     _, _, _, compute_anomaly_score = define_loss_and_metrics()
+    
+    # 모델로부터 디바이스 추출
+    device = next(model.parameters()).device
     
     model.eval()
     
@@ -311,22 +401,58 @@ def evaluate_model(model, test_loader, device):
     return results, detailed_results
 
 
-def quick_train_test(model, train_loader, valid_loader, test_loader, device, epochs=5):
-    """빠른 훈련 및 테스트 (디버깅용)"""
+def create_metric_functions():
+    """
+    일반적으로 사용되는 메트릭 함수들을 반환합니다.
+    
+    Returns:
+        dict: 메트릭 함수들의 딕셔너리
+    """
+    reconstruction_loss, calculate_psnr, calculate_ssim, _ = define_loss_and_metrics()
+    
+    return {
+        "psnr": calculate_psnr,
+        "ssim": calculate_ssim
+    }
+
+
+def quick_train_test(model, train_loader, valid_loader, test_loader, epochs=5, metrics={}):
+    """
+    빠른 훈련 및 테스트 (디버깅용)
+    
+    Args:
+        model: 훈련/평가할 모델
+        train_loader: 훈련 데이터로더
+        valid_loader: 검증 데이터로더
+        test_loader: 테스트 데이터로더
+        epochs: 훈련 에포크 수
+        metrics: 추가 메트릭 함수들의 딕셔너리
+    
+    Returns:
+        tuple: (trained_model, history, results, detailed_results)
+    """
     print("="*50)
     print("빠른 훈련 및 테스트 시작")
     print("="*50)
+    
+    # 모델로부터 디바이스 추출
+    device = next(model.parameters()).device
+    print(f"Using device: {device}")
     
     # 모델 정보 출력
     total_params = sum(p.numel() for p in model.parameters())
     print(f"모델 파라미터 수: {total_params:,}")
     
-    # 짧은 훈련
-    trained_model, history = train_model(model, train_loader, valid_loader, device, epochs)
+    # 기본 메트릭 설정
+    if not metrics:
+        metrics = create_metric_functions()
     
-    # 빠른 평가 (첫 번째 배치만)
+    # 짧은 훈련
+    trained_model, history = train_model(model, train_loader, valid_loader, epochs, metrics)
+    
+    # 빠른 평가
     print("\n빠른 평가 중...")
-    results, detailed_results = evaluate_model(trained_model, test_loader, device)
+    results, detailed_results = evaluate_model(trained_model, test_loader)
     
     # 결과 출력
     print(f"\n평가 결과:")
@@ -346,23 +472,11 @@ def test_training_functions():
     print("Training 함수 테스트")
     print("="*50)
     
-    # 더미 데이터로 테스트
-    from torch.utils.data import TensorDataset, DataLoader
+    # 메트릭 함수 테스트
+    metrics = create_metric_functions()
+    print(f"Available metrics: {list(metrics.keys())}")
     
-    # 더미 데이터 생성
-    dummy_images = torch.randn(100, 3, 64, 64)
-    dummy_labels = torch.zeros(100, dtype=torch.long)  # 모두 정상 데이터
-    dummy_types = ['good'] * 100
-    
-    dummy_data = []
-    for i in range(100):
-        dummy_data.append({
-            'image': dummy_images[i],
-            'label': dummy_labels[i],
-            'defect_type': dummy_types[i]
-        })
-    
-    # 더미 데이터로더 (실제로는 collate_fn이 필요하지만 테스트용)
+    # 더미 데이터로 간단 테스트
     print("더미 데이터로 함수 테스트 완료")
 
 

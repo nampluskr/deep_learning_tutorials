@@ -5,12 +5,11 @@
 import os
 import numpy as np
 import torch
-from typing import List, Optional
 
 # 각 모듈에서 필요한 함수들 import
-from mvtec import setup_environment, create_dataloaders, define_transforms
+from mvtec import get_transforms, get_dataloaders
 from vanila_ae import VanillaAutoEncoder  
-from train import train_model, evaluate_model
+from train import get_device, train_model, evaluate_model
 from utils import (
     visualize_training_history,
     visualize_reconstruction_examples, 
@@ -20,10 +19,9 @@ from utils import (
 )
 
 
-def main_pipeline(data_dir: str, categories: Optional[List[str]] = None, 
-                 num_epochs: int = 50, batch_size: int = 32, 
-                 latent_dim: int = 512, num_workers: int = 4,
-                 save_models: bool = True, save_results: bool = True):
+def main_pipeline(data_dir, categories=None, num_epochs=50, batch_size=32, 
+                 latent_dim=512, img_size=256, normalize=False,
+                 save_models=True, save_results=True):
     """
     메인 실험 파이프라인
     
@@ -33,7 +31,8 @@ def main_pipeline(data_dir: str, categories: Optional[List[str]] = None,
         num_epochs: 훈련 에포크 수
         batch_size: 배치 크기
         latent_dim: 잠재 공간 차원
-        num_workers: 데이터로더 워커 수
+        img_size: 이미지 크기
+        normalize: ImageNet 정규화 사용 여부
         save_models: 모델 저장 여부
         save_results: 결과 저장 여부
     
@@ -43,8 +42,8 @@ def main_pipeline(data_dir: str, categories: Optional[List[str]] = None,
     """
     
     # 설정 및 초기화
-    device = setup_environment()
-    train_transform, test_transform = define_transforms()
+    device = get_device(seed=42)
+    train_transform, test_transform = get_transforms(img_size=img_size, normalize=normalize)
     
     # MVTec 카테고리 정의 (전체 또는 선택)
     if categories is None:
@@ -60,7 +59,8 @@ def main_pipeline(data_dir: str, categories: Optional[List[str]] = None,
     print(f"Total categories: {len(categories)}")
     print(f"Device: {device}")
     print(f"Epochs: {num_epochs}, Batch size: {batch_size}")
-    print(f"Latent dimension: {latent_dim}")
+    print(f"Latent dimension: {latent_dim}, Image size: {img_size}")
+    print(f"Normalize: {normalize}")
     print("="*60)
     
     # 카테고리별 실험
@@ -71,17 +71,19 @@ def main_pipeline(data_dir: str, categories: Optional[List[str]] = None,
         try:
             # 1. 데이터 로더 생성
             print("Creating dataloaders...")
-            train_loader, valid_loader, test_loader = create_dataloaders(
-                data_dir, category, train_transform, test_transform, 
-                batch_size=batch_size, num_workers=num_workers
+            train_loader, valid_loader, test_loader = get_dataloaders(
+                data_dir, category, batch_size,
+                train_transform=train_transform, 
+                test_transform=test_transform
             )
             
             # 2. 모델 초기화
             print("Initializing model...")
             model = VanillaAutoEncoder(latent_dim=latent_dim).to(device)
-            model_info = model.get_model_info()
-            print(f"Model parameters: {model_info['total_parameters']:,}")
-            print(f"Model size: {model_info['model_size_mb']:.1f} MB")
+            total_params = sum(p.numel() for p in model.parameters())
+            model_size_mb = total_params * 4 / (1024 * 1024)  # float32 기준
+            print(f"Model parameters: {total_params:,}")
+            print(f"Model size: {model_size_mb:.1f} MB")
             
             # 3. 모델 훈련
             print("Training model...")
@@ -203,7 +205,7 @@ def main_pipeline(data_dir: str, categories: Optional[List[str]] = None,
     return all_category_results, results_df
 
 
-def quick_test(data_dir: str, test_categories: List[str] = None, epochs: int = 5):
+def quick_test(data_dir, test_categories=None, epochs=5):
     """
     빠른 테스트 실행 (개발 및 디버깅용)
     
@@ -224,7 +226,8 @@ def quick_test(data_dir: str, test_categories: List[str] = None, epochs: int = 5
         categories=test_categories,
         num_epochs=epochs,
         batch_size=16,  # 작은 배치 크기
-        num_workers=2,   # 적은 워커 수
+        img_size=256,
+        normalize=False,  # 정규화 사용 안함
         save_models=False,
         save_results=False
     )
@@ -233,7 +236,34 @@ def quick_test(data_dir: str, test_categories: List[str] = None, epochs: int = 5
     return results, df
 
 
-def full_experiment(data_dir: str):
+def test_experiment(data_dir):
+    """
+    중간 크기 테스트 실험 (3개 카테고리)
+    
+    Args:
+        data_dir: MVTec 데이터셋 경로
+    """
+    print("🧪 Test Experiment")
+    print("Testing with 3 categories...")
+    
+    test_categories = ['bottle', 'grid', 'tile']
+    
+    results, df = main_pipeline(
+        data_dir=data_dir,
+        categories=test_categories,
+        num_epochs=15,
+        batch_size=24,
+        img_size=256,
+        normalize=False,
+        save_models=True,
+        save_results=True
+    )
+    
+    print("\n🎯 Test experiment completed!")
+    return results, df
+
+
+def full_experiment(data_dir):
     """
     전체 MVTec 카테고리에 대한 완전한 실험
     
@@ -249,12 +279,39 @@ def full_experiment(data_dir: str):
         num_epochs=50,
         batch_size=32,
         latent_dim=512,
-        num_workers=4,
+        img_size=256,
+        normalize=False,
         save_models=True,
         save_results=True
     )
     
     print("\n🎉 Full experiment completed!")
+    return results, df
+
+
+def experiment_with_normalization(data_dir):
+    """
+    ImageNet 정규화를 사용한 실험
+    
+    Args:
+        data_dir: MVTec 데이터셋 경로
+    """
+    print("🔍 Experiment with ImageNet Normalization")
+    
+    test_categories = ['bottle', 'grid', 'tile']
+    
+    results, df = main_pipeline(
+        data_dir=data_dir,
+        categories=test_categories,
+        num_epochs=20,
+        batch_size=32,
+        img_size=256,
+        normalize=True,  # ImageNet 정규화 사용
+        save_models=True,
+        save_results=True
+    )
+    
+    print("\n📊 Normalization experiment completed!")
     return results, df
 
 
@@ -264,7 +321,7 @@ if __name__ == "__main__":
     DATA_DIR = "/path/to/mvtec_anomaly_detection"
     
     # 실행 모드 선택
-    RUN_MODE = "quick"  # "quick", "test", "full" 중 선택
+    RUN_MODE = "quick"  # "quick", "test", "full", "norm" 중 선택
     
     print("="*60)
     print("MVTec Anomaly Detection with Vanilla AutoEncoder")
@@ -281,23 +338,19 @@ if __name__ == "__main__":
             
         elif RUN_MODE == "test":
             # 중간 테스트 (3개 카테고리, 15 에포크)
-            test_categories = ['bottle', 'grid', 'tile']
-            results, df = main_pipeline(
-                data_dir=DATA_DIR,
-                categories=test_categories,
-                num_epochs=15,
-                batch_size=24,
-                save_models=True,
-                save_results=True
-            )
+            results, df = test_experiment(DATA_DIR)
             
         elif RUN_MODE == "full":
             # 전체 실험 (모든 카테고리, 50 에포크)
             results, df = full_experiment(DATA_DIR)
             
+        elif RUN_MODE == "norm":
+            # 정규화 실험 (3개 카테고리, ImageNet 정규화 사용)
+            results, df = experiment_with_normalization(DATA_DIR)
+            
         else:
             print(f"Unknown run mode: {RUN_MODE}")
-            print("Available modes: 'quick', 'test', 'full'")
+            print("Available modes: 'quick', 'test', 'full', 'norm'")
     
     except Exception as e:
         print(f"\n❌ Experiment failed: {e}")
