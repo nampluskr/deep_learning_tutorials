@@ -16,7 +16,7 @@ from copy import deepcopy
 from utils import define_loss_and_metrics
 
 
-def set_device(seed=42):
+def set_seed(seed=42):
     """디바이스 설정 및 시드 고정"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     random.seed(seed)
