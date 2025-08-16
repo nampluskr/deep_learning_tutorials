@@ -10,7 +10,7 @@ from pytorch_msssim import ms_ssim as pytorch_ms_ssim
 # Factory Functions
 # =============================================================================
 
-def get_loss_function(loss_type='combined'):
+def get_loss_fn(loss_type='combined'):
     """Get loss function by name"""
     loss_functions = {
         'mse': mse_loss,
@@ -330,7 +330,7 @@ if __name__ == "__main__":
     
     # Test loss functions
     print("Testing loss functions:")
-    loss_fn = get_loss_function('combined')
+    loss_fn = get_loss_fn('combined')
     loss = loss_fn(pred, target)
     print(f"Combined loss: {loss.item():.4f}")
     
