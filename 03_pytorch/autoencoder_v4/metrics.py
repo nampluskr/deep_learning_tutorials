@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import warnings
-from pytorch_msssim import ssim as pytorch_ssim, ms_ssim as pytorch_ms_ssim
+
+from pytorch_msssim import ssim as pytorch_ssim
+from pytorch_msssim import ms_ssim as pytorch_ms_ssim
 
 
 # =============================================================================
@@ -77,22 +78,30 @@ def psnr(pred, target, max_val=1.0):
 
 def ssim(pred, target, data_range=1.0, size_average=True):
     """Structural Similarity Index metric (higher is better)"""
-    return pytorch_ssim(pred, target, data_range=data_range, size_average=size_average)
+    return pytorch_ssim(pred, target, 
+                        data_range=data_range, 
+                        size_average=size_average)
 
 
 def ssim_loss(pred, target, data_range=1.0, size_average=True):
     """Structural Similarity Index loss (lower is better)"""
-    return 1 - pytorch_ssim(pred, target, data_range=data_range, size_average=size_average)
+    return 1 - pytorch_ssim(pred, target, 
+                            data_range=data_range, 
+                            size_average=size_average)
 
 
 def ms_ssim(pred, target, data_range=1.0, size_average=True):
     """Multi-Scale Structural Similarity Index metric (higher is better)"""
-    return pytorch_ms_ssim(pred, target, data_range=data_range, size_average=size_average)
+    return pytorch_ms_ssim(pred, target, 
+                           data_range=data_range,
+                           size_average=size_average)
 
 
 def ms_ssim_loss(pred, target, data_range=1.0, size_average=True):
     """Multi-Scale Structural Similarity Index loss (lower is better)"""
-    return 1 - pytorch_ms_ssim(pred, target, data_range=data_range, size_average=size_average)
+    return 1 - pytorch_ms_ssim(pred, target, 
+                               data_range=data_range, 
+                               size_average=size_average)
 
 
 def ssim_l1_loss(pred, target, ssim_weight=0.5, l1_weight=0.5):
