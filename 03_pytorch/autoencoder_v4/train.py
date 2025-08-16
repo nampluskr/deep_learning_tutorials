@@ -3,15 +3,13 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import random
-from sklearn.metrics import (
-    roc_auc_score, average_precision_score, f1_score, accuracy_score
-)
+from sklearn.metrics import (roc_auc_score, 
+    average_precision_score, f1_score, accuracy_score)
 import sys
 from tqdm import tqdm
-import time
-from copy import deepcopy
+from time import time
 
-from metrics import get_metrics, compute_reconstruction_error
+from metrics import get_criterion, get_metrics, compute_reconstruction_error
 
 
 def set_seed(seed=42, device='cpu'):
@@ -23,12 +21,11 @@ def set_seed(seed=42, device='cpu'):
     if device == 'cuda':
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        # Additional settings for deterministic behavior
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
 
-def denormalize_images(images, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+def denormalize(images, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     """Denormalize images from ImageNet normalization back to [0, 1] range"""
     device = images.device
     mean = torch.tensor(mean).view(1, 3, 1, 1).to(device)
@@ -43,19 +40,20 @@ def denormalize_images(images, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.
 
 def train_model(model, train_loader, config, valid_loader=None):
     """Main training loop for autoencoder model"""
-    criterion = torch.nn.MSELoss()
+    criterion = get_criterion()
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay
     )
-    metrics = get_metrics()
+    metrics = get_metrics(include_perceptual=False)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5
     )
 
     best_loss = float('inf')
     for epoch in range(1, config.num_epochs + 1):
+        start_time = time()
         # Training phase
         train_results = train_epoch(model, train_loader, criterion, optimizer, metrics=metrics)
         train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items()])
@@ -65,8 +63,9 @@ def train_model(model, train_loader, config, valid_loader=None):
             valid_results = evaluate_epoch(model, valid_loader, criterion, metrics=metrics)
             valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
 
+            elapsed_time = time() - start_time
             print(f" [{epoch:2d}/{config.num_epochs}] "
-                  f"{train_info} | (val) {valid_info}")
+                  f"{train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
 
             # Update learning rate based on validation loss
             scheduler.step(valid_results["loss"])
@@ -75,7 +74,9 @@ def train_model(model, train_loader, config, valid_loader=None):
             if valid_results["loss"] < best_loss:
                 best_loss = valid_results["loss"]
         else:
-            print(f" [{epoch:2d}/{config.num_epochs}] {train_info}")
+            elapsed_time = time() - start_time
+            print(f" [{epoch:2d}/{config.num_epochs}] {train_info} "
+                  f"({elapsed_time:.1f}s)")
 
 
 def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
@@ -107,7 +108,7 @@ def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
             # Handle normalization: if images are normalized (contain negative values), denormalize for loss calculation
             if normal_images.min() < 0:
                 # Images are normalized, denormalize for consistent comparison with sigmoid output
-                target_images = denormalize_images(normal_images)
+                target_images = denormalize(normal_images)
             else:
                 # Images are already in [0, 1] range
                 target_images = normal_images
@@ -128,7 +129,7 @@ def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
                         results[metric_name] += 0.0
 
             num_batches += 1
-            progress_info = {f'{key}': f'{value/num_batches:.4f}'
+            progress_info = {f'{key}': f'{value/num_batches:.3f}'
                              for key, value in results.items()}
             progress_bar.set_postfix(progress_info)
 
@@ -163,7 +164,7 @@ def evaluate_epoch(model, data_loader, criterion, metrics={}):
             # Handle normalization: if images are normalized (contain negative values), denormalize for loss calculation
             if normal_images.min() < 0:
                 # Images are normalized, denormalize for consistent comparison with sigmoid output
-                target_images = denormalize_images(normal_images)
+                target_images = denormalize(normal_images)
             else:
                 # Images are already in [0, 1] range
                 target_images = normal_images
@@ -180,7 +181,7 @@ def evaluate_epoch(model, data_loader, criterion, metrics={}):
                     results[metric_name] += 0.0
 
             num_batches += 1
-            progress_info = {f'{key}': f'{value/num_batches:.4f}'
+            progress_info = {f'{key}': f'{value/num_batches:.3f}'
                              for key, value in results.items()}
             progress_bar.set_postfix(progress_info)
 
@@ -209,7 +210,7 @@ def compute_anomaly_scores(model, data_loader, method='mse'):
             # Handle normalization for consistent comparison
             if images.min() < 0:
                 # Images are normalized, denormalize for consistent comparison
-                target_images = denormalize_images(images)
+                target_images = denormalize(images)
             else:
                 # Images are already in [0, 1] range
                 target_images = images
