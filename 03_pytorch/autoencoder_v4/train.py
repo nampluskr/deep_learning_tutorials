@@ -68,7 +68,12 @@ def train_model(model, train_loader, config, valid_loader=None):
                   f"{train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
 
             # Update learning rate based on validation loss
+            ole_lr = scheduler.get_last_lr()[0]
             scheduler.step(valid_results["loss"])
+            new_lr = scheduler.get_last_lr()[0]
+            if new_lr != ole_lr:
+                
+                print(f" > Learning rate: {ole_lr:.4e} -> {new_lr:.4e}")
 
             # Track best model
             if valid_results["loss"] < best_loss:
@@ -105,7 +110,8 @@ def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
             optimizer.zero_grad()
             reconstructed, latent, features = model(normal_images)
 
-            # Handle normalization: if images are normalized (contain negative values), denormalize for loss calculation
+            # Handle normalization: if images are normalized (contain negative values), 
+            # denormalize for loss calculation
             if normal_images.min() < 0:
                 # Images are normalized, denormalize for consistent comparison with sigmoid output
                 target_images = denormalize(normal_images)
