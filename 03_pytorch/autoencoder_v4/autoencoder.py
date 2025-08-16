@@ -9,7 +9,7 @@ import torchvision.models as models
 # Model Factory Functions
 # =============================================================================
 
-def load_model(model_type, **model_params):
+def get_model(model_type, **model_params):
     """Load and return the specified autoencoder model"""
     available_models = ['vanilla_ae', 'unet_ae']
     in_channels = model_params.get('in_channels', 3)

@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from config import Config, print_config
 from train import train_model, set_seed, evaluate_anomaly_detection
-from autoencoder import load_model
+from autoencoder import get_model
 from mvtec import get_transforms, get_dataloaders
 
 
@@ -46,7 +46,7 @@ def main(config):
     # 2. Model Loading
     # =====================================================================
     print("\n*** Loading model...")
-    model = load_model(
+    model = get_model(
         config.model_type,
         in_channels=config.in_channels,
         out_channels=config.out_channels,
