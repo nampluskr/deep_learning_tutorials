@@ -5,21 +5,28 @@ import torch.nn.functional as F
 import torchvision.models as models
 
 
-def get_model(config):
-    if config.model_type == 'vanilla_ae':
+def load_model(model_type, **model_params):
+    """Load and return the specified autoencoder model"""
+    available_models = ['vanilla_ae', 'unet_ae']
+    in_channels = model_params.get('in_channels', 3)
+    out_channels = model_params.get('out_channels', 3)
+    latent_dim = model_params.get('latent_dim', 512)
+
+    if model_type == 'vanilla_ae':
         model = VanillaAE(
-            in_channels=config.in_channels,
-            out_channels=config.out_channels,
-            latent_dim=config.latent_dim
-        ).to(config.device)
-    elif config.model_type == 'unet_ae':
+            in_channels=in_channels,
+            out_channels=out_channels,
+            latent_dim=latent_dim
+        )
+    elif model_type == 'unet_ae':
         model = UnetAE(
-            in_channels=config.in_channels,
-            out_channels=config.out_channels,
-            latent_dim=config.latent_dim
-        ).to(config.device)
+            in_channels=in_channels,
+            out_channels=out_channels,
+            latent_dim=latent_dim
+        )
     else:
-        raise ValueError("Unknown model type. Choose 'vanilla_ae' or 'unet_ae'.")
+        raise ValueError(f"Unknown model type: {model_type}. "
+                         f"Available models: {available_models}")
     return model
 
 
@@ -28,7 +35,8 @@ def get_model(config):
 # =============================================================================
 
 class ConvBlock(nn.Module):
-    """기본 Convolution Block"""
+    """Basic convolution block with batch normalization and activation"""
+    
     def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1,
                  norm=True, activation='leaky_relu'):
         super().__init__()
@@ -53,8 +61,11 @@ class ConvBlock(nn.Module):
         return self.conv_block(x)
 
 
+
+
 class DeconvBlock(nn.Module):
-    """기본 Deconvolution Block"""
+    """Basic deconvolution block with batch normalization and activation"""
+    
     def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1,
                  norm=True, activation='relu', dropout=False):
         super().__init__()
@@ -82,9 +93,15 @@ class DeconvBlock(nn.Module):
         return self.deconv_block(x)
 
 
+
+
+# =============================================================================
 # Vanilla AutoEncoder
+# =============================================================================
+
 class VanillaEncoder(nn.Module):
-    """기본 Encoder"""
+    """Basic encoder with convolutional layers and global average pooling"""
+    
     def __init__(self, in_channels=3, latent_dim=512):
         super().__init__()
 
@@ -107,8 +124,11 @@ class VanillaEncoder(nn.Module):
         return latent, features
 
 
+
+
 class VanillaDecoder(nn.Module):
-    """기본 Decoder"""
+    """Basic decoder with deconvolutional layers and sigmoid activation"""
+    
     def __init__(self, out_channels=3, latent_dim=512):
         super().__init__()
 
@@ -131,8 +151,11 @@ class VanillaDecoder(nn.Module):
         return reconstructed
 
 
+
+
 class VanillaAE(nn.Module):
-    """기본 AutoEncoder"""
+    """Basic autoencoder combining vanilla encoder and decoder"""
+    
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512):
         super().__init__()
         self.encoder = VanillaEncoder(in_channels, latent_dim)
@@ -144,77 +167,15 @@ class VanillaAE(nn.Module):
         return reconstructed, latent, features
 
 
-# =============================================================================
-# Vanilla Autoencoder
-# =============================================================================
-
-class VanillaEncoder(nn.Module):
-    """기본 Encoder"""
-    def __init__(self, in_channels=3, latent_dim=512):
-        super().__init__()
-
-        self.conv_blocks = nn.Sequential(
-            ConvBlock(in_channels, 32),      # 256 -> 128
-            ConvBlock(32, 64),               # 128 -> 64
-            ConvBlock(64, 128),              # 64 -> 32
-            ConvBlock(128, 256),             # 32 -> 16
-            ConvBlock(256, 512),             # 16 -> 8
-        )
-
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512, latent_dim)
-
-    def forward(self, x):
-        features = self.conv_blocks(x)
-        pooled = self.pool(features)
-        pooled = pooled.view(pooled.size(0), -1)
-        latent = self.fc(pooled)
-        return latent, features
-
-
-class VanillaDecoder(nn.Module):
-    """기본 Decoder"""
-    def __init__(self, out_channels=3, latent_dim=512):
-        super().__init__()
-
-        self.fc = nn.Linear(latent_dim, 512 * 8 * 8)
-        self.unflatten = nn.Unflatten(1, (512, 8, 8))
-
-        self.deconv_blocks = nn.Sequential(
-            DeconvBlock(512, 256),           # 8 -> 16
-            DeconvBlock(256, 128),           # 16 -> 32
-            DeconvBlock(128, 64),            # 32 -> 64
-            DeconvBlock(64, 32),             # 64 -> 128
-            nn.ConvTranspose2d(32, out_channels, kernel_size=4, stride=2, padding=1),  # 128 -> 256
-            nn.Sigmoid(),
-        )
-
-    def forward(self, latent):
-        x = self.fc(latent)
-        x = self.unflatten(x)
-        reconstructed = self.deconv_blocks(x)
-        return reconstructed
-
-
-class VanillaAE(nn.Module):
-    """기본 AutoEncoder"""
-    def __init__(self, in_channels=3, out_channels=3, latent_dim=512):
-        super().__init__()
-        self.encoder = VanillaEncoder(in_channels, latent_dim)
-        self.decoder = VanillaDecoder(out_channels, latent_dim)
-
-    def forward(self, x):
-        latent, features = self.encoder(x)
-        reconstructed = self.decoder(latent)
-        return reconstructed, latent, features
 
 
 # =============================================================================
-# Unet-stype Autoencoder with Skip Connections
+# UNet-style Autoencoder with Skip Connections
 # =============================================================================
 
 class UnetEncoder(nn.Module):
-    """Skip Connection이 있는 UNet 스타일 Encoder"""
+    """UNet-style encoder with skip connections for feature preservation"""
+    
     def __init__(self, in_channels=3, latent_dim=512):
         super().__init__()
 
@@ -245,8 +206,11 @@ class UnetEncoder(nn.Module):
         return latent, e5, skip_connections
 
 
+
+
 class UnetDecoder(nn.Module):
-    """Skip Connection이 있는 UNet 스타일 Decoder"""
+    """UNet-style decoder with skip connections for detailed reconstruction"""
+    
     def __init__(self, out_channels=3, latent_dim=512):
         super().__init__()
 
@@ -277,8 +241,11 @@ class UnetDecoder(nn.Module):
         return reconstructed
 
 
+
+
 class UnetAE(nn.Module):
-    """Skip Connection이 있는 UNet 스타일 AutoEncoder"""
+    """UNet-style autoencoder with skip connections for enhanced detail preservation"""
+    
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512):
         super().__init__()
         self.encoder = UnetEncoder(in_channels, latent_dim)
@@ -290,8 +257,9 @@ class UnetAE(nn.Module):
         return reconstructed, latent, features
 
 
-if __name__ == "__main__":
 
+
+if __name__ == "__main__":
     # Example usage
     model = UnetAE(in_channels=3, out_channels=3, latent_dim=512)
     x = torch.randn(8, 3, 256, 256)  # Batch of 8 images
