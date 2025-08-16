@@ -5,6 +5,10 @@ import torch.nn.functional as F
 import torchvision.models as models
 
 
+# =============================================================================
+# Model Factory Functions
+# =============================================================================
+
 def load_model(model_type, **model_params):
     """Load and return the specified autoencoder model"""
     available_models = ['vanilla_ae', 'unet_ae']

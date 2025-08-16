@@ -14,8 +14,7 @@ from mvtec import get_transforms, get_dataloaders
 config_list = [
     Config(
         model_type='unet_ae',
-        num_epochs=20,
-        latent_dim=1024,
+        num_epochs=5,
     ),
 ]
 

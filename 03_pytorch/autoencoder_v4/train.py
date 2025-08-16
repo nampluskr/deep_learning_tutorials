@@ -9,7 +9,7 @@ import sys
 from tqdm import tqdm
 from time import time
 
-from metrics import get_criterion, get_metrics, compute_reconstruction_error
+from metrics import load_criterion, load_metrics, compute_reconstruction_error
 
 
 def set_seed(seed=42, device='cpu'):
@@ -40,13 +40,13 @@ def denormalize(images, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
 
 def train_model(model, train_loader, config, valid_loader=None):
     """Main training loop for autoencoder model"""
-    criterion = get_criterion()
+    criterion = load_criterion()
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.learning_rate,
         weight_decay=config.weight_decay
     )
-    metrics = get_metrics(include_perceptual=False)
+    metrics = load_metrics(include_perceptual=False)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5
     )

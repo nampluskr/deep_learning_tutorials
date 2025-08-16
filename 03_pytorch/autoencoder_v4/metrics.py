@@ -11,10 +11,10 @@ from pytorch_msssim import ms_ssim as pytorch_ms_ssim
 # Metric Factory Functions
 # =============================================================================
 
-def get_criterion():
+def load_criterion():
     return combined_loss
 
-def get_metrics(include_perceptual=False):
+def load_metrics(include_perceptual=False):
     metrics = {
         'ssim': ssim,
         'psnr': psnr,
