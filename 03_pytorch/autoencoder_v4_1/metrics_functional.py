@@ -251,16 +251,14 @@ def compute_reconstruction_error(pred, target, method='mse', reduction='none'):
         else:
             error = torch.sqrt(F.mse_loss(pred, target, reduction=reduction))
     elif method == 'ssim':
-        # SSIM-based error (1 - SSIM for each sample)
         if reduction == 'none':
-            # Compute SSIM for each sample in batch
             batch_errors = []
             for i in range(pred.size(0)):
-                ssim_val = ssim(pred[i:i+1], target[i:i+1])
-                batch_errors.append(1 - ssim_val)
+                ssim_loss_val = ssim_loss(pred[i:i+1], target[i:i+1])
+                batch_errors.append(ssim_loss_val)
             error = torch.stack(batch_errors)
         else:
-            error = 1 - ssim(pred, target)
+            error = ssim_loss(pred, target)
     else:
         raise ValueError(f"Unknown method: {method}. Available: mse, l1, l2, ssim")
 

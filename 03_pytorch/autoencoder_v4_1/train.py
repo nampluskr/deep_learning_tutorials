@@ -291,6 +291,15 @@ def save_model(model, config):
         json.dump(asdict(config), f, indent=4)
 
 
+def load_weights(model, model_path):
+    """Load the model state"""
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+
+    model.load_state_dict(torch.load(model_path))
+    return model
+
+
 # =============================================================================
 # Anomaly Detection Evaluation
 # =============================================================================

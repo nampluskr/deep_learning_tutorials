@@ -1,5 +1,6 @@
 import torch
 from dataclasses import dataclass, asdict, fields
+from typing import Dict, List, Optional
 import json
 import yaml
 
@@ -35,7 +36,7 @@ class Config:
     learning_rate: float = 1e-3         # optimizer learning rate
     weight_decay: float = 1e-5          # optimizer weight decay
     loss_type: str = "combined"         # loss function type
-    
+
     # =====================================================================
     # Saving configuration
     # =====================================================================
@@ -47,23 +48,43 @@ class Config:
     # =====================================================================
     # Early Stopping configuration
     # =====================================================================
-    fine_tuning: bool = False            # whether to fine-tune the model
-    early_stopping: bool = False         # enable/disable early stopping
+    fine_tuning: bool = False           # whether to fine-tune the model
+    early_stopping: bool = False        # enable/disable early stopping
     early_stopping_patience: int = 5    # patience for early stopping
     evaluation: bool = False            # whether to evaluate the model after training
 
-    include_keys = {
-        "batch_size":    "batch", 
-        "latent_dim":    "latent", 
-        "in_channels":   "in", 
-        "out_channels":  "out",
-        "seed":          "seed", 
-        "learning_rate": "lr", 
-        "weight_decay":  "decay",
-        "loss_type":     "loss", 
-        "category":      "cat",
-        "valid_ratio":   "val",
-    }
+    include_keys: Dict[str, str] = None
+    exclude_keys: List[str] = None
+
+    def __post_init__(self):
+        if self.include_keys is None:
+            self.include_keys = {              
+                "batch_size":    "batch",
+                "img_size":      "size",
+                "latent_dim":    "latent",
+                "in_channels":   "in",
+                "out_channels":  "out",
+                "seed":          "seed",
+                "learning_rate": "lr",
+                "weight_decay":  "decay",
+                "loss_type":     "loss",
+                "category":      "cat",
+                "valid_ratio":   "val",
+            }
+            self.exclude_keys = [
+                "model_path", 
+                "config_path", 
+                "include_keys",
+                "exclude_keys"
+            ]
+
+
+def load_config(config_path):
+    """Load configuration file (json)"""
+    with open(config_path, "r") as f:
+        cfg_dict = json.load(f)
+    return Config(**cfg_dict)
+
 
 def print_config(config, show_all=False):
     """Print configuration settings in a formatted table"""
@@ -71,8 +92,8 @@ def print_config(config, show_all=False):
     print("=" * 40)
     print(header)
     print("=" * 40)
-
-    default_config = Config()  # create a default instance for comparison
+    # create a default instance for comparison
+    default_config = Config()
 
     for f in fields(config):
         key = f.name
@@ -80,7 +101,8 @@ def print_config(config, show_all=False):
         default_value = getattr(default_config, key)
 
         if show_all or user_value != default_value:
-            print(f"{key:<20}: {user_value}")
+            if key not in config.exclude_keys:
+                print(f"{key:<20}: {user_value}")
 
     print("=" * 40)
 
@@ -97,7 +119,7 @@ def get_config_prefix(config):
             if user_value != default_value:
                 parts.append(f"{config.include_keys[key]}-{user_value}")
 
-    suffix = "_".join(parts) if parts else "default"
+    suffix = "_".join(parts) if parts else "preset"
     return f"{config.model_type}_{config.category}_{suffix}"
 
 

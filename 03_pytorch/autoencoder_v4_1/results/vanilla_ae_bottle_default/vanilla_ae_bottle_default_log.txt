@@ -1,0 +1,186 @@
+ > Log saved to ./results/.../vanilla_ae_bottle_default_log.txt
+========================================
+Non-default Config Settings
+========================================
+model_type          : vanilla_ae
+num_epochs          : 100
+save_model          : True
+save_log            : True
+fine_tuning         : True
+early_stopping      : True
+========================================
+
+*** Loading data...
+
+*** Loading model...
+ > Model: VanillaAE
+ > Parameters: 22,650,691
+ > Size: 86.4 MB
+ > Latent dim: 512
+
+*** Starting training with validation...
+ [ 1/100] loss=0.478, psnr=8.754, ssim=0.147 | (val) loss=0.501, psnr=7.927, ssim=0.092 (6.4s)
+ [ 2/100] loss=0.401, psnr=9.114, ssim=0.385 | (val) loss=0.396, psnr=8.682, ssim=0.437 (6.1s)
+ [ 3/100] loss=0.393, psnr=9.181, ssim=0.410 | (val) loss=0.428, psnr=8.354, ssim=0.341 (6.2s)
+ > EarlyStopping counter: 1/5
+ [ 4/100] loss=0.385, psnr=9.277, ssim=0.431 | (val) loss=0.386, psnr=8.708, ssim=0.473 (6.3s)
+ [ 5/100] loss=0.382, psnr=9.369, ssim=0.416 | (val) loss=0.482, psnr=8.341, ssim=0.148 (3.3s)
+ > EarlyStopping counter: 1/5
+ [ 6/100] loss=0.366, psnr=9.710, ssim=0.416 | (val) loss=0.449, psnr=8.778, ssim=0.209 (6.1s)
+ > EarlyStopping counter: 2/5
+ [ 7/100] loss=0.336, psnr=10.196, ssim=0.445 | (val) loss=0.403, psnr=10.034, ssim=0.262 (6.4s)
+ > EarlyStopping counter: 3/5
+ [ 8/100] loss=0.309, psnr=10.637, ssim=0.490 | (val) loss=0.378, psnr=10.699, ssim=0.297 (6.4s)
+ [ 9/100] loss=0.288, psnr=10.981, ssim=0.520 | (val) loss=0.317, psnr=11.264, ssim=0.425 (6.2s)
+ [10/100] loss=0.269, psnr=11.439, ssim=0.545 | (val) loss=0.282, psnr=11.559, ssim=0.508 (2.8s)
+ [11/100] loss=0.257, psnr=11.739, ssim=0.562 | (val) loss=0.263, psnr=12.084, ssim=0.543 (6.0s)
+ [12/100] loss=0.241, psnr=12.377, ssim=0.576 | (val) loss=0.250, psnr=13.482, ssim=0.542 (6.2s)
+ [13/100] loss=0.215, psnr=13.514, ssim=0.619 | (val) loss=0.240, psnr=13.025, ssim=0.593 (6.3s)
+ [14/100] loss=0.194, psnr=14.034, ssim=0.661 | (val) loss=0.209, psnr=13.953, ssim=0.657 (6.1s)
+ [15/100] loss=0.175, psnr=14.589, ssim=0.695 | (val) loss=0.172, psnr=15.306, ssim=0.717 (3.3s)
+ [16/100] loss=0.161, psnr=14.785, ssim=0.717 | (val) loss=0.148, psnr=16.755, ssim=0.749 (6.2s)
+ [17/100] loss=0.145, psnr=15.287, ssim=0.739 | (val) loss=0.132, psnr=18.039, ssim=0.768 (6.1s)
+ [18/100] loss=0.142, psnr=14.887, ssim=0.744 | (val) loss=0.122, psnr=19.216, ssim=0.780 (6.0s)
+ [19/100] loss=0.132, psnr=15.485, ssim=0.756 | (val) loss=0.112, psnr=20.065, ssim=0.792 (5.9s)
+ [20/100] loss=0.127, psnr=15.373, ssim=0.761 | (val) loss=0.107, psnr=20.566, ssim=0.797 (6.1s)
+ [21/100] loss=0.127, psnr=15.066, ssim=0.761 | (val) loss=0.104, psnr=21.289, ssim=0.799 (3.4s)
+ [22/100] loss=0.123, psnr=15.374, ssim=0.765 | (val) loss=0.101, psnr=21.553, ssim=0.799 (6.1s)
+ [23/100] loss=0.124, psnr=14.996, ssim=0.764 | (val) loss=0.101, psnr=21.481, ssim=0.799 (6.2s)
+ > EarlyStopping counter: 1/5
+ [24/100] loss=0.118, psnr=15.463, ssim=0.771 | (val) loss=0.095, psnr=21.722, ssim=0.807 (6.3s)
+ [25/100] loss=0.124, psnr=14.683, ssim=0.764 | (val) loss=0.104, psnr=21.116, ssim=0.791 (6.2s)
+ > EarlyStopping counter: 1/5
+ [26/100] loss=0.120, psnr=15.205, ssim=0.767 | (val) loss=0.135, psnr=18.994, ssim=0.749 (3.2s)
+ > EarlyStopping counter: 2/5
+ [27/100] loss=0.117, psnr=15.300, ssim=0.771 | (val) loss=0.185, psnr=14.813, ssim=0.653 (6.2s)
+ > EarlyStopping counter: 3/5
+ [28/100] loss=0.114, psnr=15.364, ssim=0.775 | (val) loss=0.209, psnr=13.607, ssim=0.617 (5.7s)
+ > EarlyStopping counter: 4/5
+ [29/100] loss=0.114, psnr=15.416, ssim=0.774 | (val) loss=0.159, psnr=16.828, ssim=0.689 (6.1s)
+ > EarlyStopping counter: 5/5
+ > Early stopping triggered!
+ > Training completed in 163.6s
+
+*** Starting fine-tuning on validation data...
+ [ 1/5] loss=0.115, psnr=21.226, ssim=0.749 (2.1s)
+ [ 2/5] loss=0.100, psnr=23.125, ssim=0.779 (2.1s)
+ [ 3/5] loss=0.096, psnr=23.729, ssim=0.788 (2.2s)
+ [ 4/5] loss=0.086, psnr=24.320, ssim=0.809 (2.1s)
+ [ 5/5] loss=0.084, psnr=24.500, ssim=0.812 (2.2s)
+ > Fine-tuning completed in 10.7s
+
+*** Saving model and configuration...
+ > Model saved to ./results/.../vanilla_ae_bottle_default_model.pth
+ > Config saved to ./results/.../vanilla_ae_bottle_default_config.json
+
+*** Model [1/2] training completed at 2025-08-17 14:18:33.
+
+
+*** Model [2/2] training started...
+ > Log saved to ./results/.../unet_ae_bottle_default_log.txt
+========================================
+Non-default Config Settings
+========================================
+model_type          : unet_ae
+num_epochs          : 100
+save_model          : True
+save_log            : True
+fine_tuning         : True
+early_stopping      : True
+========================================
+
+*** Loading data...
+
+*** Loading model...
+ > Model: UnetAE
+ > Parameters: 23,340,355
+ > Size: 89.0 MB
+ > Latent dim: 512
+
+*** Starting training with validation...
+ [ 1/100] loss=0.419, psnr=10.560, ssim=0.131 | (val) loss=0.348, psnr=12.230, ssim=0.251 (6.2s)
+ [ 2/100] loss=0.247, psnr=14.837, ssim=0.445 | (val) loss=0.271, psnr=15.292, ssim=0.341 (6.4s)
+ [ 3/100] loss=0.155, psnr=18.125, ssim=0.659 | (val) loss=0.222, psnr=16.963, ssim=0.464 (6.5s)
+ [ 4/100] loss=0.111, psnr=21.198, ssim=0.753 | (val) loss=0.122, psnr=22.892, ssim=0.716 (6.2s)
+ [ 5/100] loss=0.078, psnr=23.160, ssim=0.833 | (val) loss=0.092, psnr=23.666, ssim=0.802 (6.3s)
+ [ 6/100] loss=0.058, psnr=24.331, ssim=0.885 | (val) loss=0.073, psnr=24.673, ssim=0.844 (3.4s)
+ [ 7/100] loss=0.051, psnr=24.583, ssim=0.902 | (val) loss=0.061, psnr=25.917, ssim=0.872 (6.2s)
+ [ 8/100] loss=0.046, psnr=24.968, ssim=0.914 | (val) loss=0.043, psnr=27.300, ssim=0.910 (6.1s)
+ [ 9/100] loss=0.042, psnr=25.464, ssim=0.922 | (val) loss=0.038, psnr=28.108, ssim=0.925 (6.2s)
+ [10/100] loss=0.039, psnr=25.816, ssim=0.928 | (val) loss=0.032, psnr=29.109, ssim=0.937 (6.3s)
+ [11/100] loss=0.036, psnr=26.284, ssim=0.932 | (val) loss=0.033, psnr=28.653, ssim=0.943 (3.4s)
+ > EarlyStopping counter: 1/5
+ [12/100] loss=0.036, psnr=26.583, ssim=0.934 | (val) loss=0.029, psnr=29.419, ssim=0.939 (6.2s)
+ [13/100] loss=0.034, psnr=26.944, ssim=0.938 | (val) loss=0.034, psnr=28.427, ssim=0.942 (6.2s)
+ > EarlyStopping counter: 1/5
+ [14/100] loss=0.031, psnr=27.201, ssim=0.942 | (val) loss=0.027, psnr=30.095, ssim=0.947 (6.1s)
+ [15/100] loss=0.031, psnr=27.395, ssim=0.944 | (val) loss=0.025, psnr=31.004, ssim=0.951 (6.2s)
+ [16/100] loss=0.028, psnr=27.927, ssim=0.949 | (val) loss=0.035, psnr=28.185, ssim=0.948 (3.4s)
+ > EarlyStopping counter: 1/5
+ [17/100] loss=0.028, psnr=28.040, ssim=0.950 | (val) loss=0.023, psnr=31.807, ssim=0.959 (6.2s)
+ [18/100] loss=0.027, psnr=28.136, ssim=0.953 | (val) loss=0.028, psnr=30.232, ssim=0.955 (6.2s)
+ > EarlyStopping counter: 1/5
+ [19/100] loss=0.026, psnr=28.424, ssim=0.954 | (val) loss=0.022, psnr=32.302, ssim=0.962 (6.0s)
+ [20/100] loss=0.025, psnr=28.725, ssim=0.956 | (val) loss=0.026, psnr=30.326, ssim=0.961 (6.3s)
+ > EarlyStopping counter: 1/5
+ [21/100] loss=0.025, psnr=28.782, ssim=0.958 | (val) loss=0.029, psnr=28.863, ssim=0.964 (3.5s)
+ > EarlyStopping counter: 2/5
+ [22/100] loss=0.024, psnr=28.935, ssim=0.958 | (val) loss=0.024, psnr=31.690, ssim=0.963 (6.1s)
+ > EarlyStopping counter: 3/5
+ [23/100] loss=0.023, psnr=29.368, ssim=0.960 | (val) loss=0.025, psnr=29.896, ssim=0.969 (6.1s)
+ > EarlyStopping counter: 4/5
+ [24/100] loss=0.022, psnr=29.568, ssim=0.962 | (val) loss=0.020, psnr=32.713, ssim=0.970 (6.0s)
+ [25/100] loss=0.020, psnr=29.761, ssim=0.965 | (val) loss=0.027, psnr=29.351, ssim=0.969 (6.2s)
+ > EarlyStopping counter: 1/5
+ [26/100] loss=0.020, psnr=30.001, ssim=0.966 | (val) loss=0.016, psnr=34.518, ssim=0.974 (6.3s)
+ [27/100] loss=0.020, psnr=29.994, ssim=0.966 | (val) loss=0.020, psnr=32.641, ssim=0.971 (3.3s)
+ > EarlyStopping counter: 1/5
+ [28/100] loss=0.021, psnr=30.108, ssim=0.967 | (val) loss=0.026, psnr=30.213, ssim=0.969 (6.2s)
+ > EarlyStopping counter: 2/5
+ [29/100] loss=0.019, psnr=30.459, ssim=0.968 | (val) loss=0.024, psnr=30.517, ssim=0.971 (6.1s)
+ > EarlyStopping counter: 3/5
+ [30/100] loss=0.020, psnr=30.254, ssim=0.968 | (val) loss=0.015, psnr=34.976, ssim=0.973 (6.0s)
+ [31/100] loss=0.020, psnr=30.400, ssim=0.968 | (val) loss=0.029, psnr=28.304, ssim=0.970 (6.3s)
+ > EarlyStopping counter: 1/5
+ [32/100] loss=0.020, psnr=30.365, ssim=0.969 | (val) loss=0.018, psnr=32.717, ssim=0.968 (3.5s)
+ > EarlyStopping counter: 2/5
+ [33/100] loss=0.020, psnr=30.517, ssim=0.969 | (val) loss=0.025, psnr=30.001, ssim=0.971 (6.2s)
+ > EarlyStopping counter: 3/5
+ [34/100] loss=0.018, psnr=30.744, ssim=0.970 | (val) loss=0.015, psnr=34.761, ssim=0.972 (6.1s)
+ [35/100] loss=0.018, psnr=31.011, ssim=0.971 | (val) loss=0.013, psnr=35.869, ssim=0.975 (6.1s)
+ [36/100] loss=0.019, psnr=30.650, ssim=0.972 | (val) loss=0.020, psnr=32.089, ssim=0.976 (6.0s)
+ > EarlyStopping counter: 1/5
+ [37/100] loss=0.017, psnr=31.213, ssim=0.972 | (val) loss=0.014, psnr=36.104, ssim=0.977 (3.2s)
+ > EarlyStopping counter: 2/5
+ [38/100] loss=0.018, psnr=31.044, ssim=0.973 | (val) loss=0.016, psnr=33.565, ssim=0.980 (6.4s)
+ > EarlyStopping counter: 3/5
+ [39/100] loss=0.017, psnr=31.481, ssim=0.974 | (val) loss=0.013, psnr=35.541, ssim=0.976 (6.1s)
+ [40/100] loss=0.016, psnr=31.689, ssim=0.975 | (val) loss=0.011, psnr=36.354, ssim=0.979 (6.4s)
+ [41/100] loss=0.015, psnr=31.854, ssim=0.976 | (val) loss=0.011, psnr=36.854, ssim=0.981 (6.5s)
+ [42/100] loss=0.018, psnr=31.401, ssim=0.975 | (val) loss=0.016, psnr=33.419, ssim=0.980 (3.2s)
+ > EarlyStopping counter: 1/5
+ [43/100] loss=0.016, psnr=31.877, ssim=0.975 | (val) loss=0.012, psnr=37.083, ssim=0.981 (6.3s)
+ > EarlyStopping counter: 2/5
+ [44/100] loss=0.015, psnr=32.310, ssim=0.976 | (val) loss=0.013, psnr=36.122, ssim=0.981 (6.1s)
+ > EarlyStopping counter: 3/5
+ [45/100] loss=0.015, psnr=32.135, ssim=0.977 | (val) loss=0.015, psnr=34.817, ssim=0.981 (6.2s)
+ > EarlyStopping counter: 4/5
+ [46/100] loss=0.016, psnr=31.989, ssim=0.977 | (val) loss=0.014, psnr=35.275, ssim=0.982 (6.0s)
+ > EarlyStopping counter: 5/5
+ > Early stopping triggered!
+ > Training completed in 262.2s
+
+*** Starting fine-tuning on validation data...
+ [ 1/5] loss=0.051, psnr=27.877, ssim=0.915 (2.2s)
+ [ 2/5] loss=0.038, psnr=31.182, ssim=0.922 (2.2s)
+ [ 3/5] loss=0.028, psnr=32.198, ssim=0.949 (-0.7s)
+ [ 4/5] loss=0.021, psnr=33.087, ssim=0.965 (2.2s)
+ [ 5/5] loss=0.020, psnr=33.661, ssim=0.967 (2.2s)
+ > Fine-tuning completed in 8.0s
+
+*** Saving model and configuration...
+ > Model saved to ./results/.../unet_ae_bottle_default_model.pth
+ > Config saved to ./results/.../unet_ae_bottle_default_config.json
+
+*** Model [2/2] training completed at 2025-08-17 14:23:04.
+

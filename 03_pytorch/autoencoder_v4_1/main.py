@@ -14,22 +14,21 @@ from mvtec import get_transforms, get_dataloaders
 # =============================================================================
 # Setup Configurations
 # =============================================================================
+common_config = dict(
+    num_epochs=100,
+    save_log=True,
+    save_model=True,
+    fine_tuning=True,
+    early_stopping=True,
+)
 config_list = [
     Config(
-        model_type='unet_ae',
-        num_epochs=3,
-        latent_dim=256,
-        learning_rate=2e-3,
-        save_log=True,
-        save_model=True,
+        model_type='vanilla_ae',
+        **common_config,
     ),
     Config(
         model_type='unet_ae',
-        num_epochs=3,
-        latent_dim=1024,
-        learning_rate=3e-3,
-        save_log=True,
-        save_model=True,
+        **common_config,
     ),
 ]
 
