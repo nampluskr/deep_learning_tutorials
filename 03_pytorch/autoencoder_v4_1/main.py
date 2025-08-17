@@ -1,11 +1,12 @@
 import os
+import sys
 import torch
 from time import time
 from dataclasses import replace, fields, asdict
-import json
+from datetime import datetime
 
-from config import Config, print_config
-from train import train_model, set_seed, evaluate_anomaly_detection
+from config import Config, print_config, get_config_prefix
+from train import train_model, save_log, save_model, set_seed, evaluate_anomaly_detection
 from autoencoder import get_model
 from mvtec import get_transforms, get_dataloaders
 
@@ -16,12 +17,18 @@ from mvtec import get_transforms, get_dataloaders
 config_list = [
     Config(
         model_type='unet_ae',
-        num_epochs=5,
-        # loss_type='combined',
-        # fine_tuning=False,
-        # evaluation=False,
-        # early_stopping=True,
-        # early_stopping_patience=5,
+        num_epochs=3,
+        latent_dim=256,
+        learning_rate=2e-3,
+        save_log=True,
+        save_model=True,
+    ),
+    Config(
+        model_type='unet_ae',
+        num_epochs=3,
+        latent_dim=1024,
+        learning_rate=3e-3,
+        save_log=True,
         save_model=True,
     ),
 ]
@@ -30,6 +37,9 @@ config_list = [
 # Main training pipeline for autoencoder models
 # =============================================================================
 def main(config):
+    if config.save_log:
+        save_log(config)
+
     print_config(config)
     set_seed(seed=config.seed, device=config.device)
 
@@ -107,54 +117,21 @@ def main(config):
         print(f" > Defect types: {test_results['defect_types']}")
 
         elapsed_time = time() - start_time
-        print(f" > Evaluation completed in {elapsed_time:.1f}s")
+        print(f" > Evaluation completed in {elapsed_time:.1f}")
 
     # =====================================================================
     # 6. Save Model
     # =====================================================================
     if config.save_model:
-        # Create results directory
-        results_dir = os.path.join(os.getcwd(), "results")
-        os.makedirs(results_dir, exist_ok=True)
-
-        # Build subdirectory with model_type and changed config values
-        suffix = get_config_suffix(config)
-        sub_dir = f"{config.model_type}_{config.category}_{suffix}"
-        save_dir = os.path.join(results_dir, sub_dir)
-        os.makedirs(save_dir, exist_ok=True)
-
-        # Final save path
-        model_filename = sub_dir + "_model.pth"
-        model_path = os.path.join(save_dir, model_filename)
-        config.model_path = model_path
-        torch.save(model.state_dict(), model_path)
-        print(f" > Model saved to ./results/{sub_dir}/{model_filename}")
-
-        config_filename = sub_dir + "_config.json"
-        config_path = os.path.join(save_dir, config_filename)
-        config.config_path = config_path
-        with open(config_path, 'w') as f:
-            json.dump(asdict(config), f, indent=4)
-
-
-def get_config_suffix(config):
-    """Generate suffix string with non-default config values (except save options)"""
-    default_config = Config()
-    parts = []
-    for f in fields(config):
-        key = f.name
-        if key in ["model_type", "save_model"]:  # skip save options
-            continue
-        user_value = getattr(config, key)
-        default_value = getattr(default_config, key)
-        if user_value != default_value:
-            parts.append(f"{key}-{user_value}")
-    return "_".join(parts) if parts else "default"
+        print("\n*** Saving model and configuration...")
+        save_model(model, config)
 
 
 if __name__ == "__main__":
 
     for idx, config in enumerate(config_list):
-        print(f"\n*** [{idx + 1}/{len(config_list)}] Training model")
+        print(f"\n*** Model [{idx + 1}/{len(config_list)}] training started...")
         main(config)
-        print(f"\n*** Model {idx + 1} training completed!")
+        timestamp = f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        print(f"\n*** Model [{idx + 1}/{len(config_list)}] "
+              f"training completed at {timestamp}.\n")

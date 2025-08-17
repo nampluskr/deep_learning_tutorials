@@ -5,12 +5,18 @@ import numpy as np
 import random
 from sklearn.metrics import (roc_auc_score, 
     average_precision_score, f1_score, accuracy_score)
+
+from dataclasses import fields, asdict
+import json
+import os
 import sys
 from tqdm import tqdm
 from time import time
 
 # from metrics import get_criterion, get_metrics, compute_reconstruction_error
 from metrics_functional import get_loss_fn, get_metrics, compute_reconstruction_error
+from config import Config, get_config_prefix
+
 
 def set_seed(seed=42, device='cpu'):
     """Set random seeds for reproducibility across all random number generators"""
@@ -38,6 +44,10 @@ def denormalize(images, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     return torch.clamp(denorm_images, 0.0, 1.0)
 
 
+# =============================================================================
+# Train Model for Data Loader
+# =============================================================================
+
 def train_model(model, train_loader, config, valid_loader=None):
     """Main training loop for autoencoder model"""
     criterion = get_loss_fn(loss_type=config.loss_type)
@@ -46,7 +56,7 @@ def train_model(model, train_loader, config, valid_loader=None):
         lr=config.learning_rate,
         weight_decay=config.weight_decay
     )
-    metrics = get_metrics(metric_names=['psnr', 'ssim', 'ms_ssim'])
+    metrics = get_metrics(metric_names=['psnr', 'ssim'])
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.5, patience=5
     )
@@ -102,6 +112,15 @@ def train_model(model, train_loader, config, valid_loader=None):
                   f"({elapsed_time:.1f}s)")
 
 
+# =============================================================================
+# Train and Evaluate the model for One Epoch
+# =============================================================================
+
+def get_tqdm_stream():
+    """Get the appropriate stream for tqdm output"""
+    return getattr(sys, "__stdout__", None) or getattr(sys.stdout, "terminal", None) or sys.stdout
+
+
 def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
     """Train model for one epoch"""
     device = next(model.parameters()).device
@@ -112,8 +131,8 @@ def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
         results[metric_name] = 0.0
 
     num_batches = 0
-    with tqdm(data_loader, desc="Train", file=sys.stdout, ascii=True,
-              dynamic_ncols=True, leave=False) as progress_bar:
+    with tqdm(data_loader, desc="Train", file=get_tqdm_stream(), 
+              ascii=True, dynamic_ncols=True, leave=False) as progress_bar:
         for batch in progress_bar:
             images = batch['image'].to(device)
             labels = batch['label'].to(device)
@@ -171,8 +190,8 @@ def evaluate_epoch(model, data_loader, criterion, metrics={}):
         results[metric_name] = 0.0
 
     num_batches = 0
-    with tqdm(data_loader, desc="Evaluation", file=sys.stdout, ascii=True,
-              dynamic_ncols=True, leave=False) as progress_bar:
+    with tqdm(data_loader, desc="Evaluation", file=get_tqdm_stream(), 
+              ascii=True, dynamic_ncols=True, leave=False) as progress_bar:
         for batch in progress_bar:
             images = batch['image'].to(device)
             labels = batch['label'].to(device)
@@ -212,6 +231,70 @@ def evaluate_epoch(model, data_loader, criterion, metrics={}):
     return {key: value / len(data_loader) for key, value in results.items()}
 
 
+# =============================================================================
+# Save log, model and configuration
+# =============================================================================
+
+class Logger:
+    """Redirect stdout to both console and file"""
+    def __init__(self, filepath):
+        self.terminal = sys.stdout
+        self.log = open(filepath, "a", encoding="utf-8")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+
+def save_log(config):
+    """Save configuration settings to a log file"""
+    results_dir = os.path.join(os.getcwd(), "results")
+    os.makedirs(results_dir, exist_ok=True)
+
+    prefix = get_config_prefix(config)
+    save_dir = os.path.join(results_dir, prefix)
+    os.makedirs(save_dir, exist_ok=True)
+
+    log_filename = prefix + "_log.txt"
+    log_path = os.path.join(save_dir, log_filename)
+
+    sys.stdout = Logger(log_path)
+    print(f" > Log saved to ./results/.../{log_filename}")
+
+
+def save_model(model, config):
+    """Save model and configuration to disk"""
+    results_dir = os.path.join(os.getcwd(), "results")
+    os.makedirs(results_dir, exist_ok=True)
+
+    prefix = get_config_prefix(config)
+    save_dir = os.path.join(results_dir, prefix)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Save model state dictionary
+    model_filename = prefix + "_model.pth"
+    model_path = os.path.join(save_dir, model_filename)
+    config.model_path = model_path
+    print(f" > Model saved to ./results/.../{model_filename}")
+    torch.save(model.state_dict(), model_path)
+
+    # Save configuration
+    config_filename = prefix + "_config.json"
+    config_path = os.path.join(save_dir, config_filename)
+    config.config_path = config_path
+    print(f" > Config saved to ./results/.../{config_filename}")
+    with open(config_path, 'w') as f:
+        json.dump(asdict(config), f, indent=4)
+
+
+# =============================================================================
+# Anomaly Detection Evaluation
+# =============================================================================
+
 @torch.no_grad()
 def compute_anomaly_scores(model, data_loader, method='mse'):
     """Compute anomaly scores for all samples in the data loader"""
@@ -222,8 +305,8 @@ def compute_anomaly_scores(model, data_loader, method='mse'):
     labels = []
     defect_types = []
 
-    with tqdm(data_loader, desc="Computing anomaly scores", file=sys.stdout, ascii=True,
-              dynamic_ncols=True, leave=False) as progress_bar:
+    with tqdm(data_loader, desc="Computing anomaly scores", file=get_tqdm_stream(), 
+              ascii=True, dynamic_ncols=True, leave=False) as progress_bar:
         for batch in progress_bar:
             images = batch['image'].to(device)
             batch_labels = batch['label'].cpu().numpy()

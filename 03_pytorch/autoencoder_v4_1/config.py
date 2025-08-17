@@ -7,7 +7,7 @@ import yaml
 @dataclass
 class Config:
     """Configuration class for autoencoder training parameters"""
-    
+
     # =====================================================================
     # Data configuration
     # =====================================================================
@@ -24,33 +24,46 @@ class Config:
     in_channels: int = 3
     out_channels: int = 3
     latent_dim: int = 512
-    model_type: str = ""  # 'vanilla_ae' or 'unet_ae'
+    model_type: str = ""  # (ex) 'vanilla_ae' or 'unet_ae'
 
     # =====================================================================
     # Training configuration
     # =====================================================================
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    seed: int = 42                   # random seed for reproducibility
-    num_epochs: int = 10             # number of training epochs
-    learning_rate: float = 1e-3      # optimizer learning rate
-    weight_decay: float = 1e-5       # optimizer weight decay
-    loss_type: str = "combined"      # loss function type
-
+    seed: int = 42                      # random seed for reproducibility
+    num_epochs: int = 10                # number of training epochs
+    learning_rate: float = 1e-3         # optimizer learning rate
+    weight_decay: float = 1e-5          # optimizer weight decay
+    loss_type: str = "combined"         # loss function type
+    
     # =====================================================================
     # Saving configuration
     # =====================================================================
-    save_model: bool = False         # whether to save the model after training
-    model_path: str = ""             # path to save the trained model
-    config_path: str = ""            # path to save the configuration
-    
+    save_model: bool = False            # whether to save the model after training
+    save_log: bool = False              # whether to save the training log
+    model_path: str = ""                # path to save the trained model
+    config_path: str = ""               # path to save the configuration
+
     # =====================================================================
     # Early Stopping configuration
     # =====================================================================
-    fine_tuning: bool = True         # whether to fine-tune the model
-    evaluation: bool = True          # whether to evaluate the model after training
-    early_stopping: bool = False     # enable/disable early stopping
-    early_stopping_patience: int = 5 # patience for early stopping
+    fine_tuning: bool = False            # whether to fine-tune the model
+    early_stopping: bool = False         # enable/disable early stopping
+    early_stopping_patience: int = 5    # patience for early stopping
+    evaluation: bool = False            # whether to evaluate the model after training
 
+    include_keys = {
+        "batch_size":    "batch", 
+        "latent_dim":    "latent", 
+        "in_channels":   "in", 
+        "out_channels":  "out",
+        "seed":          "seed", 
+        "learning_rate": "lr", 
+        "weight_decay":  "decay",
+        "loss_type":     "loss", 
+        "category":      "cat",
+        "valid_ratio":   "val",
+    }
 
 def print_config(config, show_all=False):
     """Print configuration settings in a formatted table"""
@@ -70,6 +83,22 @@ def print_config(config, show_all=False):
             print(f"{key:<20}: {user_value}")
 
     print("=" * 40)
+
+
+def get_config_prefix(config):
+    """Generate prefix string with non-default config values (except save options)"""
+    default_config = Config()
+    parts = []
+    for f in fields(config):
+        key = f.name
+        if key in config.include_keys.keys():
+            user_value = getattr(config, key)
+            default_value = getattr(default_config, key)
+            if user_value != default_value:
+                parts.append(f"{config.include_keys[key]}-{user_value}")
+
+    suffix = "_".join(parts) if parts else "default"
+    return f"{config.model_type}_{config.category}_{suffix}"
 
 
 if __name__ == "__main__":
