@@ -18,6 +18,9 @@ train_loader, valid_loader, test_loader = get_dataloaders(
 ```python
 def get_model(model_type, **model_params):
 
+class VanillaAE(nn.Module):   # model_type: "vanilla_ae"
+class UnetAE(nn.Module):      # model_type: "unnet_ae"
+
 ## (usage)
 model = get_model(model_type="vanilla_ae")
 model = model.to(config.device)
