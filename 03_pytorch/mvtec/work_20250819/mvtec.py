@@ -7,25 +7,16 @@ import os
 from glob import glob
 import warnings
 
-import cv2
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset, random_split
-import torchvision.transforms as T
+from torch.utils.data import Dataset
+from torchvision.io import read_image
+from torchvision.io.image import ImageReadMode
 
 
 class MVTecDataset(Dataset):
     """MVTec anomaly detection dataset loader"""
 
     def __init__(self, data_dir, category, split, transform=None):
-        """
-        Initialize MVTec dataset
-
-        Args:
-            data_dir: Root directory of MVTec dataset
-            category: Product category (e.g., 'bottle', 'cable', etc.)
-            split: Dataset split ('train' or 'test')
-            transform: Transform pipeline to apply to images
-        """
         self.data_dir = data_dir
         self.category = category
         self.split = split          # "train" or "test"
@@ -88,14 +79,13 @@ class MVTecDataset(Dataset):
         defect_type = self.defect_types[idx]
 
         try:
-            image = cv2.imread(image_path)
-            if image is None:
-                raise ValueError(f"Failed to load image: {image_path}")
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            # PyTorch read_image 사용 (RGB 모드, 빠르고 안정적)
+            image = read_image(image_path, mode=ImageReadMode.RGB)  # [C, H, W], uint8
+            
         except Exception as e:
             print(f"Error loading image {image_path}: {e}")
-            # Return a dummy image in case of error
-            image = torch.zeros(3, 256, 256)
+            # Return a dummy tensor in case of error
+            image = torch.zeros(3, 256, 256, dtype=torch.uint8)
 
         if self.transform:
             try:
@@ -103,7 +93,7 @@ class MVTecDataset(Dataset):
             except Exception as e:
                 print(f"Error applying transform to {image_path}: {e}")
                 # Return normalized tensor in case of transform error
-                image = torch.zeros(3, 256, 256)
+                image = torch.zeros(3, 256, 256, dtype=torch.float32)
 
         return {
             "image": image,

@@ -6,7 +6,8 @@ Handles model training, validation, and checkpointing
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.transforms as T
+# import torchvision.transforms as T
+from torchvision.transforms import v2
 from torch.utils.data import DataLoader, Subset, random_split
 
 import numpy as np
@@ -33,25 +34,93 @@ def set_seed(seed=42, device='cpu'):
 # Fractor Functions
 # =============================================================================
 
-def get_transforms(img_size=256):
-    """Get training and testing transforms for data augmentation"""
 
-    train_transforms = [
-        T.ToPILImage(),
-        T.Resize((img_size, img_size)),
-        T.RandomHorizontalFlip(p=0.5),
-        T.RandomVerticalFlip(p=0.3),
-        T.RandomRotation(degrees=10),
-        T.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.02),
-        T.RandomApply([T.GaussianBlur(kernel_size=3, sigma=(0.1, 0.5))], p=0.2),
-        T.ToTensor(),
+def get_transforms(transform_type='default', **transform_params):
+    """Get train and test transforms with GPU acceleration support"""
+    available_types = ['light', 'default', 'heavy', 'custom', 'gpu_optimized']
+
+    if transform_type not in available_types:
+        raise ValueError(f"Unknown transform type: {transform_type}. Available: {available_types}")
+
+    img_size = transform_params.get('img_size', 256)
+    device = transform_params.get('device', None)
+
+    # Base transforms
+    base_transforms = [
+        v2.Resize((img_size, img_size), antialias=True),
+        v2.ConvertImageDtype(torch.float32),
     ]
-    test_transforms = [
-        T.ToPILImage(),
-        T.Resize((img_size, img_size)),
-        T.ToTensor(),
-    ]
-    return T.Compose(train_transforms), T.Compose(test_transforms)
+
+    test_transforms = base_transforms.copy()
+
+    if transform_type == 'light':
+        aug_transforms = [
+            v2.RandomHorizontalFlip(p=0.3),
+            v2.RandomRotation(degrees=5),
+            v2.ColorJitter(brightness=0.05, contrast=0.05),
+        ]
+    elif transform_type == 'default':
+        aug_transforms = [
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomVerticalFlip(p=0.3),
+            v2.RandomRotation(degrees=10),
+            v2.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.02),
+            v2.GaussianBlur(kernel_size=3, sigma=(0.1, 0.5)),
+        ]
+    elif transform_type == 'heavy':
+        aug_transforms = [
+            v2.RandomHorizontalFlip(p=0.6),
+            v2.RandomVerticalFlip(p=0.4),
+            v2.RandomRotation(degrees=15),
+            v2.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1, hue=0.05),
+            v2.GaussianBlur(kernel_size=5, sigma=(0.1, 1.0)),
+            v2.RandomAffine(degrees=0, translate=(0.05, 0.05)),
+            v2.RandomPerspective(distortion_scale=0.1, p=0.2),
+            v2.RandomErasing(p=0.1, scale=(0.02, 0.1)),  # Random erasing augmentation
+        ]
+    elif transform_type == 'gpu_optimized':
+        aug_transforms = [
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomVerticalFlip(p=0.3),
+            v2.RandomRotation(degrees=10),
+            v2.ColorJitter(brightness=0.1, contrast=0.1),
+            v2.RandomErasing(p=0.1),
+        ]
+    elif transform_type == 'custom':
+        h_flip_p = transform_params.get('h_flip_p', 0.5)
+        v_flip_p = transform_params.get('v_flip_p', 0.3)
+        rotation_degrees = transform_params.get('rotation_degrees', 10)
+        brightness = transform_params.get('brightness', 0.1)
+        contrast = transform_params.get('contrast', 0.1)
+        blur_kernel = transform_params.get('blur_kernel', 3)
+        blur_sigma = transform_params.get('blur_sigma', (0.1, 0.5))
+        blur_p = transform_params.get('blur_p', 0.0)
+        erasing_p = transform_params.get('erasing_p', 0.0)
+
+        aug_transforms = [
+            v2.RandomHorizontalFlip(p=h_flip_p),
+            v2.RandomVerticalFlip(p=v_flip_p),
+            v2.RandomRotation(degrees=rotation_degrees),
+            v2.ColorJitter(brightness=brightness, contrast=contrast),
+        ]
+
+        if blur_p > 0:
+            aug_transforms.append(
+                v2.RandomApply([v2.GaussianBlur(kernel_size=blur_kernel, sigma=blur_sigma)], p=blur_p)
+            )
+
+        if erasing_p > 0:
+            aug_transforms.append(v2.RandomErasing(p=erasing_p))
+
+    train_transforms = base_transforms + aug_transforms
+    print(f" > Creating v2 transforms: type={transform_type}, img_size={img_size}")
+    print(f" > Train augmentations: {len(aug_transforms)} transforms")
+    if device:
+        print(f" > GPU acceleration: {device}")
+    if transform_params:
+        print(f" > Transform parameters: {transform_params}")
+
+    return v2.Compose(train_transforms), v2.Compose(test_transforms)
 
 
 def split_dataset(train_dataset, valid_dataset, valid_ratio=0.2, seed=42):
@@ -65,30 +134,124 @@ def split_dataset(train_dataset, valid_dataset, valid_ratio=0.2, seed=42):
     return train_dataset, valid_dataset
 
 
-def get_dataloader(dataset, batch_size, split, **loader_params):
-    if split == "train":
-        dataloader = DataLoader(dataset, batch_size, 
-            shuffle=True, drop_last=True, **loader_params)
-    else:
-        dataloader = DataLoader(dataset, batch_size, 
-            shuffle=False, drop_last=False, **loader_params)
+def get_dataloader(loader_type='train', **loader_params):
+    """Get dataloader with split-specific default settings"""
+    available_types = ['train', 'valid', 'test']
+
+    if loader_type not in available_types:
+        raise ValueError(f"Unknown loader type: {loader_type}. Available: {available_types}")
+
+    # Extract required parameters
+    dataset = loader_params.pop('dataset')
+    batch_size = loader_params.pop('batch_size')
+    shuffle = loader_params.pop('shuffle', None)
+
+    # Split-specific default settings
+    type_defaults = {
+        'train': {'shuffle': True, 'drop_last': True},
+        'valid': {'shuffle': False, 'drop_last': False},
+        'test': {'shuffle': False, 'drop_last': False}
+    }
+
+    defaults = type_defaults[loader_type].copy()
+
+    if shuffle is not None:
+        defaults['shuffle'] = shuffle
+
+    final_params = {**defaults, **loader_params}
+
+    if 'num_workers' not in final_params:
+        import os
+        final_params['num_workers'] = min(4, os.cpu_count() or 1)
+
+    dataloader = DataLoader(dataset, batch_size=batch_size, **final_params)
+    print()
+    print(f" > Creating dataloader: type={loader_type}, batch_size={batch_size}")
+    print(f" > Settings: {final_params}")
+    print(f" > Dataset size: {len(dataset)}, Batches: {len(dataloader)}")
+
     return dataloader
 
 
-def get_optimizer(model, optimizer_type, **optim_params):
-    if optimizer_type == "adamw":
-        optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr=1e-3,
-            weight_decay=1e-5,
-        )
+def get_optimizer(optimizer_type='adamw', **optimizer_params):
+    """Get optimizer with configurable parameters"""
+    available_types = ['adamw', 'adam', 'sgd', 'rmsprop']
+
+    if optimizer_type not in available_types:
+        raise ValueError(f"Unknown optimizer type: {optimizer_type}. Available: {available_types}")
+
+    # Extract required parameters
+    model = optimizer_params.pop('model')
+    lr = optimizer_params.pop('lr', 1e-3)
+
+    # Optimizer-specific default parameters
+    type_defaults = {
+        'adamw': {'weight_decay': 1e-5, 'betas': (0.9, 0.999)},
+        'adam': {'weight_decay': 1e-5, 'betas': (0.9, 0.999)},
+        'sgd': {'momentum': 0.9, 'weight_decay': 1e-4},
+        'rmsprop': {'momentum': 0.9, 'weight_decay': 1e-5}
+    }
+
+    final_params = {**type_defaults[optimizer_type], **optimizer_params}
+    final_params['lr'] = lr
+
+    if optimizer_type == 'adamw':
+        optimizer = torch.optim.AdamW(model.parameters(), **final_params)
+    elif optimizer_type == 'adam':
+        optimizer = torch.optim.Adam(model.parameters(), **final_params)
+    elif optimizer_type == 'sgd':
+        optimizer = torch.optim.SGD(model.parameters(), **final_params)
+    elif optimizer_type == 'rmsprop':
+        optimizer = torch.optim.RMSprop(model.parameters(), **final_params)
+
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print()
+    print(f" > Creating optimizer: {optimizer_type}")
+    print(f" > Learning rate: {lr}, Trainable parameters: {total_params:,}")
+    print(f" > Optimizer settings: {final_params}")
+
     return optimizer
 
-def get_scheduler(optimizer, scheduler_type, **scheduler_params):
-    if scheduler_type == "default":
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=5
-        )
+
+def get_scheduler(scheduler_type='plateau', **scheduler_params):
+    """Get learning rate scheduler with configurable parameters"""
+    available_types = ['plateau', 'cosine', 'step', 'exponential', 'none']
+
+    if scheduler_type not in available_types:
+        raise ValueError(f"Unknown scheduler type: {scheduler_type}. Available: {available_types}")
+
+    if scheduler_type == 'none':
+        print("No learning rate scheduler will be used")
+        return None
+
+    # Extract required parameters
+    optimizer = scheduler_params.pop('optimizer')
+
+    # Scheduler-specific default parameters
+    type_defaults = {
+        'plateau': {'mode': 'min', 'factor': 0.5, 'patience': 5},
+        'cosine': {'T_max': 50, 'eta_min': 1e-6},
+        'step': {'step_size': 10, 'gamma': 0.1},
+        'exponential': {'gamma': 0.95}
+    }
+
+    final_params = {**type_defaults[scheduler_type], **scheduler_params}
+
+    if scheduler_type == 'plateau':
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **final_params)
+    elif scheduler_type == 'cosine':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, **final_params)
+    elif scheduler_type == 'step':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **final_params)
+    elif scheduler_type == 'exponential':
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, **final_params)
+
+    current_lr = optimizer.param_groups[0]['lr']
+    print()
+    print(f" > Creating scheduler: {scheduler_type}")
+    print(f" > Current learning rate: {current_lr}")
+    print(f" > Scheduler settings: {final_params}")
+
     return scheduler
 
 
@@ -103,8 +266,8 @@ class Trainer:
         self.loss_fn = loss_fn
         self.metrics = metrics
         self.device = next(model.parameters()).device
-    
-    def fit(self, train_loader, num_epochs, valid_loader=None, scheduler=None, 
+
+    def fit(self, train_loader, num_epochs, valid_loader=None, scheduler=None,
             early_stop=False):
 
         # === Early Stopping variables ===
@@ -116,16 +279,16 @@ class Trainer:
         for epoch in range(1, num_epochs + 1):
             start_time = time()
             # Training phase
-            train_results = train_epoch(self.model, train_loader, 
+            train_results = train_epoch(self.model, train_loader,
                 self.loss_fn, self.optimizer, metrics=self.metrics)
-            train_info = ", ".join([f'{key}={value:.3f}' 
+            train_info = ", ".join([f'{key}={value:.3f}'
                                     for key, value in train_results.items()])
 
             if valid_loader is not None:
                 # Validation phase
-                valid_results = validate_epoch(self.model, valid_loader, 
+                valid_results = validate_epoch(self.model, valid_loader,
                     self.loss_fn, metrics=self.metrics)
-                valid_info = ", ".join([f'{key}={value:.3f}' 
+                valid_info = ", ".join([f'{key}={value:.3f}'
                                         for key, value in valid_results.items()])
 
                 elapsed_time = time() - start_time
@@ -183,7 +346,7 @@ def train_epoch(model, data_loader, loss_fn, optimizer, metrics={}):
         results[metric_name] = 0.0
 
     num_batches = 0
-    with tqdm(data_loader, desc="Train", file=get_tqdm_stream(), 
+    with tqdm(data_loader, desc="Train", file=get_tqdm_stream(),
               ascii=True, dynamic_ncols=True, leave=False) as progress_bar:
         for batch in progress_bar:
             images = batch['image'].to(device)
@@ -232,7 +395,7 @@ def validate_epoch(model, data_loader, loss_fn, metrics={}):
         results[metric_name] = 0.0
 
     num_batches = 0
-    with tqdm(data_loader, desc="Evaluation", file=get_tqdm_stream(), 
+    with tqdm(data_loader, desc="Evaluation", file=get_tqdm_stream(),
               ascii=True, dynamic_ncols=True, leave=False) as progress_bar:
         for batch in progress_bar:
             images = batch['image'].to(device)

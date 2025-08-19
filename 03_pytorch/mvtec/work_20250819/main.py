@@ -6,7 +6,7 @@ Orchestrates the complete training and evaluation pipeline
 from config import Config, show_config
 from mvtec import MVTecDataset
 from train import get_transforms, split_dataset, get_dataloader
-from models import get_model, save_model, show_model_info
+from models import get_model, save_model
 from metrics import get_loss_fn, get_metrics
 from train import Trainer, get_optimizer, get_scheduler, set_seed
 from evaluate import evaluate_anomaly_detection, show_results
@@ -16,7 +16,7 @@ from evaluate import evaluate_anomaly_detection, show_results
 # Setup Configurations
 # =============================================================================
 common_config = dict(
-    num_epochs=10,
+    num_epochs=20,
     # save_log=True,
     # save_model=True,
     fine_tuning=True,
@@ -25,13 +25,13 @@ common_config = dict(
 )
 config_list = [
     Config(
-        model_type='vanilla_ae',
+        model_type='adaptive_vanilla_ae',
         **common_config,
     ),
-    Config(
-        model_type='unet_ae',
-        **common_config,
-    ),
+    # Config(
+    #     model_type='unet_ae',
+    #     **common_config,
+    # ),
 ]
 
 # =============================================================================
@@ -47,9 +47,10 @@ def run(config):
     # =====================================================================
     # 1. Data Loading
     # =====================================================================
-    print("\n*** Loading data...")
+    print("\n*** Loading data loaders...")
 
-    train_transform, test_transform = get_transforms(img_size=config.img_size)
+    train_transform, test_transform = get_transforms("default", 
+        img_size=config.img_size, device=config.device)
     train_dataset = MVTecDataset(config.data_dir, config.category, "train", transform=train_transform)
     valid_dataset = MVTecDataset(config.data_dir, config.category, "train", transform=test_transform)
     test_dataset = MVTecDataset(config.data_dir, config.category, "test", transform=test_transform)
@@ -59,27 +60,30 @@ def run(config):
 
     loader_params = {"num_workers": 4, "pin_memory": True, "persistent_workers": True}
     # loader_params = {}
-    train_loader = get_dataloader(train_dataset, config.batch_size, "train", **loader_params)
-    valid_loader = get_dataloader(valid_dataset, config.batch_size, "valid", **loader_params)
-    test_loader = get_dataloader(test_dataset, config.batch_size, "test",  **loader_params)
+    train_loader = get_dataloader("train", dataset=train_dataset, 
+        batch_size=config.batch_size, **loader_params)
+    valid_loader = get_dataloader("valid", dataset=valid_dataset, 
+        batch_size=16, **loader_params)
+    test_loader = get_dataloader("test", dataset=test_dataset, 
+        batch_size=16, **loader_params)
 
     # =====================================================================
     # 2. Model Loading
     # =====================================================================
-    print("\n*** Loading model...")
+    print("\n*** Loading model / loss function / metrics...")
 
-    model = get_model(
-        model_type=config.model_type,
+    model = get_model(config.model_type,
         in_channels=config.in_channels,
         out_channels=config.out_channels,
-        latent_dim=config.latent_dim
-    ).to(config.device)
-    show_model_info(model)
+        latent_dim=config.latent_dim)
 
-    loss_fn = get_loss_fn(loss_type="combined")
-    metrics = get_metrics(metric_names=["psnr", "ssim"])
-    optimizer = get_optimizer(model, "adamw")
-    scheduler = get_scheduler(optimizer, "default")
+    loss_fn = get_loss_fn(config.loss_type)
+    metrics = get_metrics(["psnr", "ssim"])
+
+    optimizer = get_optimizer(config.optimizer_type, model=model, 
+        lr=config.learning_rate, weight_decay=config.weight_decay)
+    scheduler = get_scheduler(config.scheduler_type, optimizer=optimizer, 
+        patience=10, factor=0.3)
 
     # =====================================================================
     # 3. Model Training with Validation

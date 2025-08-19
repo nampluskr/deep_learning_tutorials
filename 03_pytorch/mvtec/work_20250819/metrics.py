@@ -15,52 +15,92 @@ from pytorch_msssim import ms_ssim as pytorch_ms_ssim
 # Factory Functions
 # =============================================================================
 
-def get_loss_fn(loss_type='combined'):
-    """Get loss function by name"""
+def get_loss_fn(loss_type='combined', **loss_params):
+    """Get loss function with configurable parameters"""
     loss_functions = {
-        'mse': mse_loss,
-        'l1': l1_loss,
-        'l2': l2_loss,
-        'smooth_l1': smooth_l1_loss,
-        'charbonnier': charbonnier_loss,
-        'combined': combined_loss,
-        'ssim': ssim_loss,
-        'ms_ssim': ms_ssim_loss,
-        'perceptual_l1': perceptual_l1_loss,
-        'edge_preserving': edge_preserving_loss,
-        'focal_mse': focal_mse_loss,
-        'robust': robust_loss
+        'mse': lambda: mse_loss,
+        'l1': lambda: l1_loss,
+        'l2': lambda: l2_loss,
+        'smooth_l1': lambda: lambda pred, target: smooth_l1_loss(
+            pred, target, beta=loss_params.get('beta', 1.0)
+        ),
+        'charbonnier': lambda: lambda pred, target: charbonnier_loss(
+            pred, target, epsilon=loss_params.get('epsilon', 1e-3)
+        ),
+        'combined': lambda: lambda pred, target: combined_loss(
+            pred, target, 
+            l1_weight=loss_params.get('l1_weight', 0.7),
+            ssim_weight=loss_params.get('ssim_weight', 0.3)
+        ),
+        'ssim': lambda: ssim_loss,
+        'ms_ssim': lambda: ms_ssim_loss,
+        'perceptual_l1': lambda: lambda pred, target: perceptual_l1_loss(
+            pred, target,
+            l1_weight=loss_params.get('l1_weight', 0.8),
+            perceptual_weight=loss_params.get('perceptual_weight', 0.2)
+        ),
+        'edge_preserving': lambda: lambda pred, target: edge_preserving_loss(
+            pred, target, edge_weight=loss_params.get('edge_weight', 0.1)
+        ),
+        'focal_mse': lambda: lambda pred, target: focal_mse_loss(
+            pred, target,
+            alpha=loss_params.get('alpha', 2.0),
+            gamma=loss_params.get('gamma', 2.0)
+        ),
+        'robust': lambda: lambda pred, target: robust_loss(
+            pred, target, alpha=loss_params.get('alpha', 0.2)
+        )
     }
     
     if loss_type not in loss_functions:
         available = ', '.join(loss_functions.keys())
         raise ValueError(f"Unknown loss type: {loss_type}. Available: {available}")
     
-    return loss_functions[loss_type]
+    loss_fn = loss_functions[loss_type]()
+    print(f" > Creating loss function: {loss_type} with params: {loss_params}")
+    
+    return loss_fn
 
 
-def get_metrics(metric_names=None):
-    """Get metric functions by names"""
+def get_metrics(metric_names=None, **metric_params):
+    """Get metric functions with unified return format"""
     metric_functions = {
-        'psnr': psnr,
-        'ssim': ssim,
-        'ms_ssim': ms_ssim,
-        'pixel_accuracy': pixel_accuracy,
-        'binary_accuracy': binary_accuracy
+        'psnr': lambda: lambda pred, target: psnr(
+            pred, target, max_val=metric_params.get('max_val', 1.0)
+        ),
+        'ssim': lambda: lambda pred, target: ssim(
+            pred, target, 
+            data_range=metric_params.get('data_range', 1.0),
+            size_average=metric_params.get('size_average', True)
+        ),
+        'ms_ssim': lambda: lambda pred, target: ms_ssim(
+            pred, target,
+            data_range=metric_params.get('data_range', 1.0),
+            size_average=metric_params.get('size_average', True)
+        ),
+        'pixel_accuracy': lambda: lambda pred, target: pixel_accuracy(
+            pred, target, threshold=metric_params.get('threshold', 0.5)
+        ),
+        'binary_accuracy': lambda: lambda pred, target: binary_accuracy(
+            pred, target, threshold=metric_params.get('threshold', 0.5)
+        )
     }
     
     if metric_names is None:
-        return metric_functions
+        selected_metrics = {name: func() for name, func in metric_functions.items()}
+        print(f"Creating all metrics: {list(selected_metrics.keys())}")
+        return selected_metrics
     
     if isinstance(metric_names, str):
         metric_names = [metric_names]
     
-    selected_metrics = {}
-    for name in metric_names:
-        if name not in metric_functions:
-            available = ', '.join(metric_functions.keys())
-            raise ValueError(f"Unknown metric: {name}. Available: {available}")
-        selected_metrics[name] = metric_functions[name]
+    invalid_names = [name for name in metric_names if name not in metric_functions]
+    if invalid_names:
+        available = ', '.join(metric_functions.keys())
+        raise ValueError(f"Unknown metrics: {invalid_names}. Available: {available}")
+    
+    selected_metrics = {name: metric_functions[name]() for name in metric_names}
+    print(f" > Creating metrics: {list(selected_metrics.keys())} with params: {metric_params}")
     
     return selected_metrics
 

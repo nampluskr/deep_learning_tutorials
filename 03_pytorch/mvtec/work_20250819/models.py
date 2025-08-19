@@ -5,15 +5,22 @@ Contains autoencoder architectures including Vanilla AE and U-Net style AE
 
 import torch.nn as nn
 from autoencoder import VanillaAE, UnetAE
-
+from autoencoder_v2 import AdaptiveVanillaAE, MultiScaleUnetAE, PatchBasedAE
 
 # =============================================================================
 # Model Factory Functions
 # =============================================================================
 
-def get_model(model_type, **model_params):
-    """Load and return the specified autoencoder model"""
-    available_models = ['vanilla_ae', 'unet_ae']
+def get_model(model_type, device='auto', **model_params):
+    """Get model instance with automatic device placement"""
+    available_models = [
+        'vanilla_ae', 'unet_ae',  # 기존 모델
+        'adaptive_vanilla_ae', 'multiscale_unet_ae', 'patchbased_ae'  # 새로운 모델
+    ]
+
+    if model_type not in available_models:
+        raise ValueError(f"Unknown model type: {model_type}. Available: {available_models}")
+
     in_channels = model_params.get('in_channels', 3)
     out_channels = model_params.get('out_channels', 3)
     latent_dim = model_params.get('latent_dim', 512)
@@ -30,23 +37,47 @@ def get_model(model_type, **model_params):
             out_channels=out_channels,
             latent_dim=latent_dim
         )
-    else:
-        raise ValueError(f"Unknown model type: {model_type}. "
-                         f"Available models: {available_models}")
+    elif model_type == 'adaptive_vanilla_ae':
+        model = AdaptiveVanillaAE(
+            in_channels=model_params.get('in_channels', 3),
+            out_channels=model_params.get('out_channels', 3),
+            latent_dim=model_params.get('latent_dim', 512),
+            target_size=model_params.get('target_size', 256)
+        )
+    elif model_type == 'multiscale_unet_ae':
+        model = MultiScaleUnetAE(
+            in_channels=model_params.get('in_channels', 3),
+            out_channels=model_params.get('out_channels', 3),
+            latent_dim=model_params.get('latent_dim', 512),
+            target_size=model_params.get('target_size', 256)
+        )
+    elif model_type == 'patchbased_ae':
+        model = PatchBasedAE(
+            in_channels=model_params.get('in_channels', 3),
+            out_channels=model_params.get('out_channels', 3),
+            latent_dim=model_params.get('latent_dim', 512),
+            target_size=model_params.get('target_size', 512),
+            patch_size=model_params.get('patch_size', 256),
+            overlap=model_params.get('overlap', 32)
+        )
+
+    if device == 'auto':
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    model = model.to(device)
+
+    total_params = sum(p.numel() for p in model.parameters())
+    model_size_mb = total_params * 4 / 1024**2
+    print(f" > Creating model: {model_type} on {device}")
+    print(f" > Model parameters: {total_params:,} ({model_size_mb:.1f} MB)")
+    print(f" > Model config: in_channels={in_channels}, out_channels={out_channels}, latent_dim={latent_dim}")
+
     return model
 
 
 # =============================================================================
 # Utility Functions for Models
 # =============================================================================
-
-def show_model_info(model):
-    total_params = sum(p.numel() for p in model.parameters())
-    device = next(model.parameters()).device
-    print(f" > Model: {model.__class__.__name__} on {device}")
-    print(f" > Parameters: {total_params:,}")
-    print(f" > Size: {total_params*4 / 1024**2:.1f} MB")
-
 
 import os
 import torch

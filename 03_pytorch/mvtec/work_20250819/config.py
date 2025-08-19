@@ -17,8 +17,6 @@ class Config:
     # =====================================================================
     # Data configuration
     # =====================================================================
-    # data_dir: str = '/home/namu/myspace/NAMU/datasets/mvtec'
-    # data_dir: str = r"E:\datasets\MVTec_AD\archive"
     data_dir = '/mnt/d/datasets/mvtec'
     category: str = 'bottle'
     batch_size: int = 32
@@ -37,51 +35,71 @@ class Config:
     # Training configuration
     # =====================================================================
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    seed: int = 42                      # random seed for reproducibility
-    num_epochs: int = 10                # number of training epochs
-    learning_rate: float = 1e-3         # optimizer learning rate
-    weight_decay: float = 1e-5          # optimizer weight decay
-    loss_type: str = "combined"         # loss function type
+    seed: int = 42
+    num_epochs: int = 10
+    learning_rate: float = 1e-3
+    weight_decay: float = 1e-5
+    
+    # =====================================================================
+    # Factory function default types
+    # =====================================================================
+    loss_type: str = "combined"                # get_loss_fn default
+    optimizer_type: str = "adamw"              # get_optimizer default
+    scheduler_type: str = "plateau"            # get_scheduler default
+    transform_type: str = "default"            # get_transforms default
+    loader_type: str = "train"                 # get_dataloader default (주로 사용되는 타입)
+    metric_names: List[str] = None             # get_metrics default (None = all metrics)
 
     # =====================================================================
     # Saving configuration
     # =====================================================================
-    save_model: bool = False            # whether to save the model after training
-    save_log: bool = False              # whether to save the training log
-    model_path: str = ""                # path to save the trained model
-    config_path: str = ""               # path to save the configuration
+    save_model: bool = False
+    save_log: bool = False
+    model_path: str = ""
+    config_path: str = ""
 
     # =====================================================================
     # Early Stopping configuration
     # =====================================================================
-    fine_tuning: bool = False           # whether to fine-tune the model
-    early_stop: bool = False        # enable/disable early stopping
-    early_stop_patience: int = 5    # patience for early stopping
-    evaluation: bool = False            # whether to evaluate the model after training
+    fine_tuning: bool = False
+    early_stop: bool = False
+    early_stop_patience: int = 5
+    evaluation: bool = False
 
     include_keys: Dict[str, str] = None
     exclude_keys: List[str] = None
 
     def __post_init__(self):
+        # metric_names 기본값 설정
+        if self.metric_names is None:
+            self.metric_names = ["psnr", "ssim"]
+            
         if self.include_keys is None:
             self.include_keys = {              
-                "batch_size":    "batch",
-                "img_size":      "size",
-                "latent_dim":    "latent",
-                "in_channels":   "in",
-                "out_channels":  "out",
-                "seed":          "seed",
-                "learning_rate": "lr",
-                "weight_decay":  "decay",
-                "loss_type":     "loss",
-                "category":      "cat",
-                "valid_ratio":   "val",
+                "batch_size":      "batch",
+                "img_size":        "size",
+                "latent_dim":      "latent",
+                "in_channels":     "in",
+                "out_channels":    "out",
+                "seed":            "seed",
+                "learning_rate":   "lr",
+                "weight_decay":    "decay",
+                "category":        "cat",
+                "valid_ratio":     "val",
             }
+            
+        if self.exclude_keys is None:
             self.exclude_keys = [
                 "model_path", 
                 "config_path", 
                 "include_keys",
-                "exclude_keys"
+                "exclude_keys",
+                "loader_type",
+                "loss_type",
+                "optimizer_type",
+                "scheduler_type",
+                "transform_type",
+                "metric_names"
             ]
 
 
