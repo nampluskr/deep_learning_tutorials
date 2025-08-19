@@ -72,8 +72,8 @@ def focal_mse_loss(pred, target, alpha=2.0, gamma=2.0):
 def edge_preserving_loss(pred, target, edge_weight=0.1):
 
 # Batch-wise Metrics for Efficiency
-def batch_psnr(pred, target, max_val=1.0)
-def batch_ssim(pred, target, data_range=1.0)
+def batch_psnr(pred, target, max_val=1.0):
+def batch_ssim(pred, target, data_range=1.0):
 ```
 
 ## 4. `train.py`
@@ -89,8 +89,8 @@ def get_dataloader(dataset, batch_size, split, **loader_params):
 def get_optimizer(model, optimizer_type, **optim_params):
 def get_scheduler(optimizer, scheduler_type, **scheduler_params):    
 
-def train_epoch(model, data_loader, criterion, optimizer, metrics={})
-def validate_epoch(model, data_loader, criterion, metrics={})
+def train_epoch(model, data_loader, criterion, optimizer, metrics={}):
+def validate_epoch(model, data_loader, criterion, metrics={}):
 ```
 
 **Classes**
@@ -122,7 +122,7 @@ def save_log(config):
 
 **Clases**
 ```python
-class Logger(log_path)
+class Logger(log_path):
 ```
 
 ## 7. `evaluate.py`
