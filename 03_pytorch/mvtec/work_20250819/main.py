@@ -5,7 +5,8 @@ Orchestrates the complete training and evaluation pipeline
 
 from config import Config, show_config
 from mvtec import MVTecDataset
-from train import get_transforms, split_dataset, get_dataloader
+from transform import get_transforms
+from train import split_dataset, get_dataloader
 from models import get_model, save_model
 from metrics import get_loss_fn, get_metrics
 from train import Trainer, get_optimizer, get_scheduler, set_seed
