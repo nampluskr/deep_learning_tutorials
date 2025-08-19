@@ -131,7 +131,7 @@ def get_config_prefix(config):
 if __name__ == "__main__":
     # Example usage
     config = Config(model_type='unet_ae', num_epochs=5)
-    print_config(config)
+    show_config(config)
 
     # Save to JSON
     with open('config.json', 'w') as f:
