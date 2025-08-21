@@ -56,19 +56,28 @@ class VanillaEncoder(nn.Module):
 
 
 class VanillaDecoder(nn.Module):
-    """Vanilla CNN decoder for autoencoder"""
-    def __init__(self, out_channels=3, latent_dim=512):
+    """Vanilla CNN decoder for autoencoder with dynamic img_size"""
+    def __init__(self, out_channels=3, latent_dim=512, img_size=256):
         super().__init__()
-        self.fc = nn.Linear(latent_dim, 512*8*8)
-        self.unflatten = nn.Unflatten(1, (512, 8, 8))
-        self.deconv_blocks = nn.Sequential(
+        self.img_size = img_size
+        self.start_size = img_size // 32  # Encoder downsampling factor (5 conv blocks)
+
+        self.fc = nn.Linear(latent_dim, 512 * self.start_size * self.start_size)
+        self.unflatten = nn.Unflatten(1, (512, self.start_size, self.start_size))
+
+        layers = [
             DeconvBlock(512, 256),
             DeconvBlock(256, 128),
             DeconvBlock(128, 64),
             DeconvBlock(64, 32),
-            nn.ConvTranspose2d(32, out_channels, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
+        ]
+        # 최종 upsampling
+        layers.append(
+            nn.ConvTranspose2d(32, out_channels, kernel_size=4, stride=2, padding=1)
         )
+        layers.append(nn.Sigmoid())
+
+        self.deconv_blocks = nn.Sequential(*layers)
 
     def forward(self, latent):
         x = self.fc(latent)
@@ -88,7 +97,7 @@ class VanillaAE(nn.Module):
     def forward(self, x):
         latent, features = self.encoder(x)
         reconstructed = self.decoder(latent)
-        
+
         return {
             'reconstructed': reconstructed,
             'latent': latent,
@@ -115,10 +124,10 @@ class VAEEncoder(nn.Module):
         features = self.conv_blocks(x)
         pooled = self.pool(features)
         pooled = pooled.view(pooled.size(0), -1)
-        
+
         mu = self.fc_mu(pooled)
         logvar = self.fc_logvar(pooled)
-        
+
         return mu, logvar, features
 
     def reparameterize(self, mu, logvar):
@@ -128,19 +137,27 @@ class VAEEncoder(nn.Module):
 
 
 class VAEDecoder(nn.Module):
-    """VAE decoder identical to vanilla decoder"""
-    def __init__(self, out_channels=3, latent_dim=512):
+    """VAE decoder identical to vanilla decoder but dynamic"""
+    def __init__(self, out_channels=3, latent_dim=512, img_size=256):
         super().__init__()
-        self.fc = nn.Linear(latent_dim, 512*8*8)
-        self.unflatten = nn.Unflatten(1, (512, 8, 8))
-        self.deconv_blocks = nn.Sequential(
+        self.img_size = img_size
+        self.start_size = img_size // 32  # Downsampling factor
+
+        self.fc = nn.Linear(latent_dim, 512 * self.start_size * self.start_size)
+        self.unflatten = nn.Unflatten(1, (512, self.start_size, self.start_size))
+
+        layers = [
             DeconvBlock(512, 256),
             DeconvBlock(256, 128),
             DeconvBlock(128, 64),
             DeconvBlock(64, 32),
-            nn.ConvTranspose2d(32, out_channels, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
+        ]
+        layers.append(
+            nn.ConvTranspose2d(32, out_channels, kernel_size=4, stride=2, padding=1)
         )
+        layers.append(nn.Sigmoid())
+
+        self.deconv_blocks = nn.Sequential(*layers)
 
     def forward(self, z):
         x = self.fc(z)
@@ -161,7 +178,7 @@ class VAE(nn.Module):
         mu, logvar, features = self.encoder(x)
         z = self.encoder.reparameterize(mu, logvar)
         reconstructed = self.decoder(z)
-        
+
         return {
             'reconstructed': reconstructed,
             'mu': mu,
@@ -187,19 +204,18 @@ def combined_loss(pred, target, mse_weight=0.5, ssim_weight=0.5, reduction='mean
     mse = F.mse_loss(pred, target, reduction=reduction)
     ssim_val = ssim(pred, target, data_range=1.0, size_average=(reduction == 'mean'))
     ssim_loss = 1 - ssim_val
-    
+
     return mse_weight * mse + ssim_weight * ssim_loss
 
 
 def vae_loss(pred, target, mu, logvar, beta=1.0, mse_weight=1.0):
     """VAE loss combining reconstruction and KL divergence"""
-    # Reconstruction loss
     recon_loss = F.mse_loss(pred, target, reduction='mean')
-    
-    # KL divergence loss
+
+    # KL divergence loss (정규화: 배치 크기만)
     kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    kl_loss = kl_loss / (mu.size(0) * mu.size(1))  # Normalize by batch size and latent dim
-    
+    kl_loss = kl_loss / mu.size(0)
+
     return mse_weight * recon_loss + beta * kl_loss
 
 
@@ -208,33 +224,36 @@ def psnr_metric(pred, target, max_val=1.0):
     """Peak Signal-to-Noise Ratio metric"""
     mse = F.mse_loss(pred, target, reduction='mean')
     if mse == 0:
-        return torch.tensor(float('inf'), device=pred.device)
-    
+        return float('inf')
     psnr = 20 * torch.log10(max_val / torch.sqrt(mse))
-    return psnr
+    return psnr.item()
 
 
 def ssim_metric(pred, target, data_range=1.0):
     """Structural Similarity Index metric"""
-    return ssim(pred, target, data_range=data_range, size_average=True)
+    return ssim(pred, target, data_range=data_range, size_average=True).item()
 
 
 def mae_metric(pred, target):
     """Mean Absolute Error metric"""
-    return F.l1_loss(pred, target, reduction='mean')
+    return F.l1_loss(pred, target, reduction='mean').item()
 
+
+_lpips_cache = {}
 
 def lpips_metric(pred, target, net='alex'):
     """Learned Perceptual Image Patch Similarity (requires lpips package)"""
-    loss_fn = lpips.LPIPS(net=net)
-    return loss_fn(pred, target).mean()
+    if net not in _lpips_cache:
+        _lpips_cache[net] = lpips.LPIPS(net=net)
+    loss_fn = _lpips_cache[net].to(pred.device)
+    return loss_fn(pred, target).mean().item()
 
 
 def binary_accuracy(pred, target, threshold=0.5):
     """Binary accuracy for reconstruction quality assessment"""
     pred_binary = (pred > threshold).float()
     target_binary = (target > threshold).float()
-    return (pred_binary == target_binary).float().mean()
+    return (pred_binary == target_binary).float().mean().item()
 
 
 if __name__ == "__main__":

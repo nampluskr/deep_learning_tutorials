@@ -127,14 +127,14 @@ def split_train_valid(train_dataset, valid_dataset, valid_ratio=0.2, seed=42):
 
     # Generate random split indices
     torch.manual_seed(seed)
-    train_indices, valid_indices = random_split(
+    train_subset, valid_subset = random_split(
         range(total_size), [train_size, valid_size],
         generator=torch.Generator().manual_seed(seed)
     )
 
     # Create subsets
-    train_subset = Subset(train_dataset, train_indices.indices)
-    valid_subset = Subset(valid_dataset, valid_indices.indices)
+    train_subset = Subset(train_dataset, train_subset.indices)
+    valid_subset = Subset(valid_dataset, valid_subset.indices)
     
     return train_subset, valid_subset
 

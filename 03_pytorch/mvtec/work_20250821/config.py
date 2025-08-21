@@ -103,12 +103,10 @@ class VAEConfig(Config):
 @dataclass
 class FastFlowConfig(Config):
     """Specialized configuration for FastFlow experiments"""
-    
-    # Override defaults for FastFlow
     loss_type: str = 'fastflow'
     learning_rate: float = 1e-3
     optimizer_type: str = 'adam'
-    scheduler_type: str = 'step'
+    scheduler_type: str = 'reduce_plateau'  # <-- step → reduce_plateau 로 변경
     metric_names: List[str] = field(default_factory=lambda: ['fastflow_log_prob', 'fastflow_anomaly_score'])
     
     # FastFlow specific parameters

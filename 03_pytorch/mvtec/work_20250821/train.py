@@ -6,6 +6,7 @@ import sys
 import logging
 import os
 from time import time
+from copy import deepcopy
 
 
 def get_logger(output_dir):
@@ -103,35 +104,35 @@ def train_epoch(model, train_loader, optimizer, loss_fn, metrics={}):
 
     with tqdm(train_loader, desc="Training", leave=False, file=sys.stdout,
               dynamic_ncols=True, ncols=100, ascii=True) as pbar:
-        
-        for batch_idx, batch_data in enumerate(pbar):
+
+        for batch_data in pbar:
             # Move data to device
             for key, value in batch_data.items():
                 if torch.is_tensor(value):
                     batch_data[key] = value.to(device)
-            
+
             optimizer.zero_grad()
-            
+
             # Forward pass
             model_outputs = model(batch_data)
-            
+
             # Compute loss
             loss = loss_fn({'preds': model_outputs, 'targets': batch_data})
-            
+
             # Backward pass
             loss.backward()
             optimizer.step()
-            
+
             # Accumulate loss
             total_loss += loss.item()
             num_batches += 1
-            
+
             # Compute metrics
             with torch.no_grad():
                 for metric_name, metric_fn in metrics.items():
                     metric_value = metric_fn({'preds': model_outputs, 'targets': batch_data})
                     total_metrics[metric_name] += metric_value.item()
-            
+
             # Update progress bar
             current_loss = total_loss / num_batches
             current_metrics = {name: value / num_batches for name, value in total_metrics.items()}
@@ -142,7 +143,7 @@ def train_epoch(model, train_loader, optimizer, loss_fn, metrics={}):
     # Return average results
     results = {'loss': total_loss / max(num_batches, 1)}
     results.update({name: value / max(num_batches, 1) for name, value in total_metrics.items()})
-    
+
     return results
 
 
@@ -159,28 +160,28 @@ def validate_epoch(model, valid_loader, loss_fn, metrics={}):
 
     with tqdm(valid_loader, desc="Validation", leave=False, file=sys.stdout,
               dynamic_ncols=True, ncols=100, ascii=True) as pbar:
-        
-        for batch_idx, batch_data in enumerate(pbar):
+
+        for batch_data in pbar:
             # Move data to device
             for key, value in batch_data.items():
                 if torch.is_tensor(value):
                     batch_data[key] = value.to(device)
-            
+
             # Forward pass
             model_outputs = model(batch_data)
-            
+
             # Compute loss
             loss = loss_fn({'preds': model_outputs, 'targets': batch_data})
-            
+
             # Accumulate loss
             total_loss += loss.item()
             num_batches += 1
-            
+
             # Compute metrics
             for metric_name, metric_fn in metrics.items():
                 metric_value = metric_fn({'preds': model_outputs, 'targets': batch_data})
                 total_metrics[metric_name] += metric_value.item()
-            
+
             # Update progress bar
             current_loss = total_loss / num_batches
             current_metrics = {name: value / num_batches for name, value in total_metrics.items()}
@@ -191,13 +192,12 @@ def validate_epoch(model, valid_loader, loss_fn, metrics={}):
     # Return average results
     results = {'loss': total_loss / max(num_batches, 1)}
     results.update({name: value / max(num_batches, 1) for name, value in total_metrics.items()})
-    
+
     return results
 
 
 class EarlyStopping:
     """Early stopping to prevent overfitting"""
-    
     def __init__(self, patience=10, min_delta=0.0, restore_best_weights=True):
         self.patience = patience
         self.min_delta = min_delta
@@ -205,16 +205,16 @@ class EarlyStopping:
         self.best_loss = float('inf')
         self.counter = 0
         self.best_weights = None
-        
+
     def __call__(self, val_loss, model):
         if val_loss < self.best_loss - self.min_delta:
             self.best_loss = val_loss
             self.counter = 0
             if self.restore_best_weights:
-                self.best_weights = model.state_dict().copy()
+                self.best_weights = deepcopy(model.state_dict())
         else:
             self.counter += 1
-            
+
         if self.counter >= self.patience:
             if self.restore_best_weights and self.best_weights is not None:
                 model.load_state_dict(self.best_weights)
@@ -222,10 +222,11 @@ class EarlyStopping:
         return False
 
 
+
 class Trainer:
     """Wrapper trainer class for anomaly detection models"""
-    
-    def __init__(self, model, optimizer, loss_fn, metrics={}, scheduler=None, 
+
+    def __init__(self, model, optimizer, loss_fn, metrics={}, scheduler=None,
                  logger=None, early_stopping=None):
         self.model = model
         self.optimizer = optimizer
@@ -235,7 +236,7 @@ class Trainer:
         self.logger = logger
         self.early_stopping = early_stopping
         self.device = next(model.parameters()).device
-        
+
         # Initialize history tracking
         self.history = {'loss': []}
         self.history.update({name: [] for name in metrics.keys()})
@@ -273,18 +274,18 @@ class Trainer:
         """Compute loss for anomaly detection models"""
         preds = data_dict['preds']
         targets = data_dict['targets']
-        
+
         # Extract target tensor (if needed)
         if isinstance(targets, dict):
             target_tensor = targets['target']
         else:
             target_tensor = targets
-        
+
         # Handle different model types
         if hasattr(self.model, 'model_type') and self.model.model_type == "fastflow":
             # FastFlow model - unsupervised, only needs pred
             return self.loss_fn(preds)
-            
+
         elif hasattr(self.model, 'model_type') and self.model.model_type == "vae":
             # VAE model - need pred, target, mu, logvar
             if isinstance(preds, dict) and 'mu' in preds and 'logvar' in preds:
@@ -300,20 +301,20 @@ class Trainer:
                 pred_tensor = preds['reconstructed']
             else:
                 pred_tensor = preds
-            
+
             return self.loss_fn(pred_tensor, target_tensor)
 
     def compute_metric(self, metric_fn, data_dict):
         """Compute a single metric for anomaly detection models"""
         preds = data_dict['preds']
         targets = data_dict['targets']
-        
+
         # Extract target tensor (if needed)
         if isinstance(targets, dict):
             target_tensor = targets['target']
         else:
             target_tensor = targets
-        
+
         # Handle different model types for the metric
         if hasattr(self.model, 'model_type') and self.model.model_type == "fastflow":
             # FastFlow model - unsupervised, metric only needs pred
@@ -323,7 +324,7 @@ class Trainer:
             except TypeError:
                 # Fall back to pred, target call (though target won't be used)
                 metric_value = metric_fn(preds, None)
-            
+
         elif hasattr(self.model, 'model_type') and self.model.model_type == "vae":
             # VAE model - check if this is a VAE-specific metric
             if isinstance(preds, dict) and 'mu' in preds and 'logvar' in preds:
@@ -345,7 +346,7 @@ class Trainer:
             # Standard autoencoder metrics
             pred_tensor = preds['reconstructed'] if isinstance(preds, dict) else preds
             metric_value = metric_fn(pred_tensor, target_tensor)
-        
+
         return metric_value
 
     def fit(self, train_loader, num_epochs, valid_loader=None):
@@ -361,7 +362,7 @@ class Trainer:
         # Create wrapped loss and metric functions that use compute_loss/compute_metric
         def wrapped_loss_fn(data_dict):
             return self.compute_loss(data_dict)
-        
+
         wrapped_metrics = {}
         for metric_name, metric_fn in self.metrics.items():
             def create_metric_wrapper(metric_function):
@@ -372,7 +373,7 @@ class Trainer:
 
         for epoch in range(1, num_epochs + 1):
             start_time = time()
-            
+
             # Training phase using general function
             train_results = train_epoch(self.model, train_loader, self.optimizer,
                                       wrapped_loss_fn, wrapped_metrics)
@@ -398,7 +399,7 @@ class Trainer:
                 valid_summary = self._format_results(valid_results, prefix="val_")
                 epoch_time = time() - start_time
                 self.log(f"[Epoch {epoch:2d}/{num_epochs}] {train_summary} | {valid_summary} ({epoch_time:.0f}s)")
-                
+
                 # Early stopping check
                 if self.early_stopping is not None:
                     if self.early_stopping(valid_results['loss'], self.model):
@@ -409,7 +410,7 @@ class Trainer:
                 train_summary = self._format_results(train_results)
                 epoch_time = time() - start_time
                 self.log(f"[Epoch {epoch:2d}/{num_epochs}] {train_summary} ({epoch_time:.0f}s)")
-            
+
             # Update learning rate scheduler
             if self.scheduler is not None:
                 if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
@@ -430,7 +431,7 @@ class Trainer:
         }
         if self.scheduler is not None:
             checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
-            
+
         torch.save(checkpoint, filepath)
         self.log(f"Checkpoint saved to {filepath}")
 
@@ -440,10 +441,10 @@ class Trainer:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.history = checkpoint['history']
-        
+
         if self.scheduler is not None and 'scheduler_state_dict' in checkpoint:
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-            
+
         self.log(f"Checkpoint loaded from {filepath}")
 
 
