@@ -1,142 +1,250 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from tqdm import tqdm
 import sys
-from pytorch_msssim import ssim
+import logging
+import os
+from time import time
+
+
+def get_logger(output_dir):
+    """Setup logging configuration"""
+    os.makedirs(output_dir, exist_ok=True)
+    log_file = os.path.join(output_dir, 'experiment.log')
+
+    # Create logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+
+    # Clear any existing handlers
+    logger.handlers.clear()
+
+    # Create file handler with timestamp and level
+    file_handler = logging.FileHandler(log_file)
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(file_formatter)
+    logger.addHandler(file_handler)
+
+    # Prevent propagation to root logger to avoid duplicate console output
+    logger.propagate = False
+    return logger
+
+
+def get_optimizer(model, optimizer_type='adam', **optimizer_params):
+    """Factory function to create an optimizer"""
+    available_optimizers = ['adam', 'sgd', 'adamw']
+    optimizer_type = optimizer_type.lower()
+
+    if optimizer_type == 'adam':
+        params = {'lr': 0.001, 'weight_decay': 1e-5}
+        params.update(optimizer_params)
+        return optim.Adam(model.parameters(), **params)
+
+    elif optimizer_type == 'sgd':
+        params = {'lr': 0.01, 'momentum': 0.9, 'weight_decay': 1e-5}
+        params.update(optimizer_params)
+        return optim.SGD(model.parameters(), **params)
+
+    elif optimizer_type == 'adamw':
+        params = {'lr': 0.001, 'weight_decay': 1e-5}
+        params.update(optimizer_params)
+        return optim.AdamW(model.parameters(), **params)
+
+    else:
+        raise ValueError(f"Unknown optimizer type: {optimizer_type}. Available optimizers: {available_optimizers}")
+
+
+def get_scheduler(optimizer, scheduler_type='step', **scheduler_params):
+    """Factory function to create a learning rate scheduler"""
+    available_schedulers = ['step', 'multi_step', 'exponential', 'cosine', 'reduce_plateau', 'none']
+    scheduler_type = scheduler_type.lower()
+
+    if scheduler_type == 'none':
+        return None
+    elif scheduler_type == 'step':
+        params = {'step_size': 10, 'gamma': 0.1}
+        params.update(scheduler_params)
+        return optim.lr_scheduler.StepLR(optimizer, **params)
+
+    elif scheduler_type == 'multi_step':
+        params = {'gamma': 0.1, 'milestones': [30, 80]}
+        params.update(scheduler_params)
+        return optim.lr_scheduler.MultiStepLR(optimizer, **params)
+
+    elif scheduler_type == 'exponential':
+        params = {'gamma': 0.9}
+        params.update(scheduler_params)
+        return optim.lr_scheduler.ExponentialLR(optimizer, **params)
+
+    elif scheduler_type == 'cosine':
+        params = {'T_max': 100, 'eta_min': 0.0}
+        params.update(scheduler_params)
+        return optim.lr_scheduler.CosineAnnealingLR(optimizer, **params)
+
+    elif scheduler_type == 'reduce_plateau':
+        params = {'mode': 'min', 'factor': 0.5, 'patience': 5, 'verbose': True}
+        params.update(scheduler_params)
+        return optim.lr_scheduler.ReduceLROnPlateau(optimizer, **params)
+
+    else:
+        raise ValueError(f"Unknown scheduler type: {scheduler_type}. Available schedulers: {available_schedulers}")
 
 
 def train_epoch(model, train_loader, optimizer, loss_fn, metrics={}):
-    """Train model for one epoch"""
+    """General training epoch function for supervised learning"""
     device = next(model.parameters()).device
     model.train()
 
-    # Initialize results tracking
-    loss_names = ['total']
-    metric_names = list(metrics.keys())
-    results = {name: 0.0 for name in loss_names + metric_names}
+    # Initialize result accumulation
+    total_loss = 0.0
+    total_metrics = {name: 0.0 for name in metrics.keys()}
+    num_batches = 0
 
     with tqdm(train_loader, desc="Training", leave=False, file=sys.stdout,
-              dynamic_ncols=True, ncols=120, ascii=True) as pbar:
-
-        for cnt, data in enumerate(pbar):
-            images = data['image'].to(device)
-            labels = data['label'].to(device)
-
-            # Use only normal samples for training in anomaly detection
-            normal_mask = labels == 0
-            if not normal_mask.any():
-                continue
-
-            normal_images = images[normal_mask]
-
+              dynamic_ncols=True, ncols=100, ascii=True) as pbar:
+        
+        for batch_idx, batch_data in enumerate(pbar):
+            # Move data to device
+            for key, value in batch_data.items():
+                if torch.is_tensor(value):
+                    batch_data[key] = value.to(device)
+            
             optimizer.zero_grad()
-            outputs = model(normal_images)
-            losses = model.compute_loss(outputs, loss_fn_dict)
-            total_loss = losses['total']
-
-            total_loss.backward()
+            
+            # Forward pass
+            model_outputs = model(batch_data)
+            
+            # Compute loss
+            loss = loss_fn({'preds': model_outputs, 'targets': batch_data})
+            
+            # Backward pass
+            loss.backward()
             optimizer.step()
-
-            for loss_name, loss_value in losses.items():
-                if loss_name in results:
-                    results[loss_name] += loss_value.item()
-
-            for metric_name, metric_fn in metrics.items():
-                if metric_name in results:
-                    metric_value = metric_fn(outputs)
-                    results[metric_name] += metric_value.item()
-
+            
+            # Accumulate loss
+            total_loss += loss.item()
+            num_batches += 1
+            
+            # Compute metrics
+            with torch.no_grad():
+                for metric_name, metric_fn in metrics.items():
+                    metric_value = metric_fn({'preds': model_outputs, 'targets': batch_data})
+                    total_metrics[metric_name] += metric_value.item()
+            
             # Update progress bar
-            pbar.set_postfix({k: f"{v/(cnt + 1):.3f}" for k, v in results.items()})
+            current_loss = total_loss / num_batches
+            current_metrics = {name: value / num_batches for name, value in total_metrics.items()}
+            pbar_dict = {'loss': f"{current_loss:.3f}"}
+            pbar_dict.update({name: f"{value:.3f}" for name, value in current_metrics.items()})
+            pbar.set_postfix(pbar_dict)
 
-    return {k: v/len(train_loader) for k, v in results.items()}
+    # Return average results
+    results = {'loss': total_loss / max(num_batches, 1)}
+    results.update({name: value / max(num_batches, 1) for name, value in total_metrics.items()})
+    
+    return results
 
 
 @torch.no_grad()
-def validate_epoch(model, valid_loader, loss_fn_dict, metrics={}):
-    """Validate model for one epoch"""
+def validate_epoch(model, valid_loader, loss_fn, metrics={}):
+    """General validation epoch function for supervised learning"""
     device = next(model.parameters()).device
     model.eval()
 
-    # Initialize results tracking
-    loss_names = list(loss_fn_dict.keys()) + ['total']
-    metric_names = list(metrics.keys())
-    results = {name: 0.0 for name in loss_names + metric_names}
+    # Initialize result accumulation
+    total_loss = 0.0
+    total_metrics = {name: 0.0 for name in metrics.keys()}
+    num_batches = 0
 
     with tqdm(valid_loader, desc="Validation", leave=False, file=sys.stdout,
-              dynamic_ncols=True, ncols=120, ascii=True) as pbar:
-
-        for cnt, data in enumerate(pbar):
-            images = data['image'].to(device)
-            labels = data['label'].to(device)
-
-            # Use only normal samples for validation in anomaly detection
-            normal_mask = labels == 0
-            if not normal_mask.any():
-                continue
-
-            normal_images = images[normal_mask]
-
-            # Forward pass - get dictionary output
-            outputs = model(normal_images)
-
-            # Compute losses using model's compute_loss method
-            losses = model.compute_loss(outputs, loss_fn_dict)
-
-            # Update loss results
-            for loss_name, loss_value in losses.items():
-                if loss_name in results:
-                    results[loss_name] += loss_value.item()
-
-            # Calculate metrics
+              dynamic_ncols=True, ncols=100, ascii=True) as pbar:
+        
+        for batch_idx, batch_data in enumerate(pbar):
+            # Move data to device
+            for key, value in batch_data.items():
+                if torch.is_tensor(value):
+                    batch_data[key] = value.to(device)
+            
+            # Forward pass
+            model_outputs = model(batch_data)
+            
+            # Compute loss
+            loss = loss_fn({'preds': model_outputs, 'targets': batch_data})
+            
+            # Accumulate loss
+            total_loss += loss.item()
+            num_batches += 1
+            
+            # Compute metrics
             for metric_name, metric_fn in metrics.items():
-                if metric_name in results:
-                    metric_value = metric_fn(outputs)
-                    results[metric_name] += metric_value.item() if torch.is_tensor(metric_value) else metric_value
-
+                metric_value = metric_fn({'preds': model_outputs, 'targets': batch_data})
+                total_metrics[metric_name] += metric_value.item()
+            
             # Update progress bar
-            pbar.set_postfix({k: f"{v/(cnt + 1):.3f}" for k, v in results.items()})
+            current_loss = total_loss / num_batches
+            current_metrics = {name: value / num_batches for name, value in total_metrics.items()}
+            pbar_dict = {'loss': f"{current_loss:.3f}"}
+            pbar_dict.update({name: f"{value:.3f}" for name, value in current_metrics.items()})
+            pbar.set_postfix(pbar_dict)
 
-    return {k: v/len(valid_loader) for k, v in results.items()}
+    # Return average results
+    results = {'loss': total_loss / max(num_batches, 1)}
+    results.update({name: value / max(num_batches, 1) for name, value in total_metrics.items()})
+    
+    return results
+
+
+class EarlyStopping:
+    """Early stopping to prevent overfitting"""
+    
+    def __init__(self, patience=10, min_delta=0.0, restore_best_weights=True):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.restore_best_weights = restore_best_weights
+        self.best_loss = float('inf')
+        self.counter = 0
+        self.best_weights = None
+        
+    def __call__(self, val_loss, model):
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+            if self.restore_best_weights:
+                self.best_weights = model.state_dict().copy()
+        else:
+            self.counter += 1
+            
+        if self.counter >= self.patience:
+            if self.restore_best_weights and self.best_weights is not None:
+                model.load_state_dict(self.best_weights)
+            return True
+        return False
 
 
 class Trainer:
-    """Trainer wrapper class for anomaly detection models"""
-
-    def __init__(self, model, optimizer, loss_fn_dict, metrics={}, logger=None):
-        """
-        Initialize trainer
-
-        Args:
-            model: The model to train
-            optimizer: Optimizer for training
-            loss_fn_dict: Dictionary of loss functions with weights
-            metrics: Dictionary of metric functions
-            logger: Logger instance for logging (optional)
-        """
+    """Wrapper trainer class for anomaly detection models"""
+    
+    def __init__(self, model, optimizer, loss_fn, metrics={}, scheduler=None, 
+                 logger=None, early_stopping=None):
         self.model = model
         self.optimizer = optimizer
-        self.loss_fn_dict = loss_fn_dict
+        self.loss_fn = loss_fn
         self.metrics = metrics
+        self.scheduler = scheduler
         self.logger = logger
+        self.early_stopping = early_stopping
         self.device = next(model.parameters()).device
-
+        
         # Initialize history tracking
-        loss_names = list(loss_fn_dict.keys()) + ['total']
-        metric_names = list(metrics.keys())
-        self.history = {name: [] for name in loss_names + metric_names}
-        self.history.update({f"val_{k}": [] for k in self.history.keys()})
+        self.history = {'loss': []}
+        self.history.update({name: [] for name in metrics.keys()})
+        self.history.update({f"val_{name}": [] for name in ['loss'] + list(metrics.keys())})
 
     def log(self, message, level='info'):
-        """
-        Log message using logger or print to console
-
-        Args:
-            message: Message to log
-            level: Log level ('info', 'debug', 'warning', 'error')
-        """
+        """Log message to file and print to console"""
         if self.logger:
-            # Log to file with level and timestamp (StreamHandler disabled for clean terminal output)
+            # Log to file with level and timestamp
             if level == 'info':
                 self.logger.info(message)
             elif level == 'debug':
@@ -148,40 +256,136 @@ class Trainer:
             else:
                 self.logger.info(message)
 
-            # Print clean message to terminal (without timestamp and level)
-            print(message)
+        # Print clean message to terminal
+        print(message)
+
+    def _format_results(self, results, prefix=""):
+        """Format results dictionary for logging"""
+        formatted = []
+        for key, value in results.items():
+            if isinstance(value, float):
+                formatted.append(f"{prefix}{key}={value:.3f}")
+            else:
+                formatted.append(f"{prefix}{key}={value}")
+        return ', '.join(formatted)
+
+    def compute_loss(self, data_dict):
+        """Compute loss for anomaly detection models"""
+        preds = data_dict['preds']
+        targets = data_dict['targets']
+        
+        # Extract target tensor (if needed)
+        if isinstance(targets, dict):
+            target_tensor = targets['target']
         else:
-            # Print to console with clean message only
-            print(message)
+            target_tensor = targets
+        
+        # Handle different model types
+        if hasattr(self.model, 'model_type') and self.model.model_type == "fastflow":
+            # FastFlow model - unsupervised, only needs pred
+            return self.loss_fn(preds)
+            
+        elif hasattr(self.model, 'model_type') and self.model.model_type == "vae":
+            # VAE model - need pred, target, mu, logvar
+            if isinstance(preds, dict) and 'mu' in preds and 'logvar' in preds:
+                pred_tensor = preds['reconstructed']
+                mu = preds['mu']
+                logvar = preds['logvar']
+                return self.loss_fn(pred_tensor, target_tensor, mu, logvar)
+            else:
+                raise ValueError("VAE model should return dict with 'reconstructed', 'mu', and 'logvar'")
+        else:
+            # Standard autoencoder - need pred, target
+            if isinstance(preds, dict) and 'reconstructed' in preds:
+                pred_tensor = preds['reconstructed']
+            else:
+                pred_tensor = preds
+            
+            return self.loss_fn(pred_tensor, target_tensor)
+
+    def compute_metric(self, metric_fn, data_dict):
+        """Compute a single metric for anomaly detection models"""
+        preds = data_dict['preds']
+        targets = data_dict['targets']
+        
+        # Extract target tensor (if needed)
+        if isinstance(targets, dict):
+            target_tensor = targets['target']
+        else:
+            target_tensor = targets
+        
+        # Handle different model types for the metric
+        if hasattr(self.model, 'model_type') and self.model.model_type == "fastflow":
+            # FastFlow model - unsupervised, metric only needs pred
+            try:
+                # Try FastFlow-specific metric call (pred only)
+                metric_value = metric_fn(preds)
+            except TypeError:
+                # Fall back to pred, target call (though target won't be used)
+                metric_value = metric_fn(preds, None)
+            
+        elif hasattr(self.model, 'model_type') and self.model.model_type == "vae":
+            # VAE model - check if this is a VAE-specific metric
+            if isinstance(preds, dict) and 'mu' in preds and 'logvar' in preds:
+                try:
+                    # Try VAE-specific metric call (pred, target, mu, logvar)
+                    pred_tensor = preds['reconstructed']
+                    mu = preds['mu']
+                    logvar = preds['logvar']
+                    metric_value = metric_fn(pred_tensor, target_tensor, mu, logvar)
+                except TypeError:
+                    # Fall back to standard metric call (pred, target)
+                    pred_tensor = preds['reconstructed'] if isinstance(preds, dict) else preds
+                    metric_value = metric_fn(pred_tensor, target_tensor)
+            else:
+                # Standard reconstruction metric
+                pred_tensor = preds['reconstructed'] if isinstance(preds, dict) else preds
+                metric_value = metric_fn(pred_tensor, target_tensor)
+        else:
+            # Standard autoencoder metrics
+            pred_tensor = preds['reconstructed'] if isinstance(preds, dict) else preds
+            metric_value = metric_fn(pred_tensor, target_tensor)
+        
+        return metric_value
 
     def fit(self, train_loader, num_epochs, valid_loader=None):
-        """
-        Fit the model using external train/validate functions
-
-        Args:
-            train_loader: Training data loader
-            num_epochs: Number of epochs to train
-            valid_loader: Validation data loader (optional)
-
-        Returns:
-            Dictionary containing training history
-        """
+        """Main training loop using general train/validate functions"""
         self.log(f"Starting training for {num_epochs} epochs...")
+        if hasattr(self.model, 'model_type'):
+            self.log(f"Model type: {self.model.model_type}")
+        self.log(f"Device: {self.device}")
+        self.log(f"Training samples: {len(train_loader.dataset)}")
+        if valid_loader:
+            self.log(f"Validation samples: {len(valid_loader.dataset)}")
+
+        # Create wrapped loss and metric functions that use compute_loss/compute_metric
+        def wrapped_loss_fn(data_dict):
+            return self.compute_loss(data_dict)
+        
+        wrapped_metrics = {}
+        for metric_name, metric_fn in self.metrics.items():
+            def create_metric_wrapper(metric_function):
+                def metric_wrapper(data_dict):
+                    return self.compute_metric(metric_function, data_dict)
+                return metric_wrapper
+            wrapped_metrics[metric_name] = create_metric_wrapper(metric_fn)
 
         for epoch in range(1, num_epochs + 1):
-            # Training using external function
+            start_time = time()
+            
+            # Training phase using general function
             train_results = train_epoch(self.model, train_loader, self.optimizer,
-                                      self.loss_fn_dict, self.metrics)
+                                      wrapped_loss_fn, wrapped_metrics)
 
             # Store training results
             for name, value in train_results.items():
                 if name in self.history:
                     self.history[name].append(value)
 
-            # Validation using external function
+            # Validation phase using general function
             if valid_loader is not None:
                 valid_results = validate_epoch(self.model, valid_loader,
-                                             self.loss_fn_dict, self.metrics)
+                                             wrapped_loss_fn, wrapped_metrics)
 
                 # Store validation results
                 for name, value in valid_results.items():
@@ -192,298 +396,56 @@ class Trainer:
                 # Log epoch summary
                 train_summary = self._format_results(train_results)
                 valid_summary = self._format_results(valid_results, prefix="val_")
-                self.log(f"[Epoch {epoch:2d}/{num_epochs}] {train_summary} | {valid_summary}")
+                epoch_time = time() - start_time
+                self.log(f"[Epoch {epoch:2d}/{num_epochs}] {train_summary} | {valid_summary} ({epoch_time:.0f}s)")
+                
+                # Early stopping check
+                if self.early_stopping is not None:
+                    if self.early_stopping(valid_results['loss'], self.model):
+                        self.log(f"Early stopping triggered at epoch {epoch}")
+                        break
             else:
                 # Log epoch summary (training only)
                 train_summary = self._format_results(train_results)
-                self.log(f"[Epoch {epoch:2d}/{num_epochs}] {train_summary}")
+                epoch_time = time() - start_time
+                self.log(f"[Epoch {epoch:2d}/{num_epochs}] {train_summary} ({epoch_time:.0f}s)")
+            
+            # Update learning rate scheduler
+            if self.scheduler is not None:
+                if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                    if valid_loader is not None:
+                        self.scheduler.step(valid_results['loss'])
+                else:
+                    self.scheduler.step()
 
         self.log("Training completed!")
         return self.history
 
-    def train_single_epoch(self, train_loader):
-        """Train for a single epoch using external function"""
-        return train_epoch(self.model, train_loader, self.optimizer,
-                          self.loss_fn_dict, self.metrics)
-
-    def validate_single_epoch(self, valid_loader):
-        """Validate for a single epoch using external function"""
-        return validate_epoch(self.model, valid_loader,
-                            self.loss_fn_dict, self.metrics)
-
-    def _format_results(self, results, prefix=""):
-        """Format results for printing"""
-        model_type = getattr(self.model, 'model_type', 'unknown')
-
-        if model_type == 'vanilla_ae':
-            key_metrics = ['total', 'ssim', 'psnr']
-        elif model_type == 'vae':
-            key_metrics = ['total', 'reconstruction', 'kl_divergence', 'ssim']
-        elif model_type == 'fastflow':
-            key_metrics = ['total', 'nll', 'log_prob']
-        elif model_type == 'stfpm':
-            key_metrics = ['total', 'feature_matching', 'feature_mag']
-        elif model_type == 'padim':
-            key_metrics = ['total', 'feature_mag']
-        else:
-            key_metrics = ['total', 'ssim', 'psnr']
-
-        formatted = []
-        for k, v in results.items():
-            if k in key_metrics:
-                formatted.append(f"{prefix}{k}={v:.3f}")
-        return ', '.join(formatted)
-
-
-# Metric functions that work with dictionary outputs
-def compute_ssim_metric(outputs):
-    """Compute SSIM between reconstructed and input images"""
-    if ('reconstructed' in outputs and 'input' in outputs and
-        isinstance(outputs['reconstructed'], torch.Tensor) and
-        isinstance(outputs['input'], torch.Tensor)):
-        try:
-            return ssim(outputs['reconstructed'], outputs['input'], data_range=1.0)
-        except Exception as e:
-            print(f"Warning: SSIM computation failed: {e}")
-            return torch.tensor(0.0)
-    else:
-        return torch.tensor(0.0)
-
-
-def compute_psnr_metric(outputs):
-    """Compute PSNR between reconstructed and input images"""
-    if ('reconstructed' in outputs and 'input' in outputs and
-        isinstance(outputs['reconstructed'], torch.Tensor) and
-        isinstance(outputs['input'], torch.Tensor)):
-        try:
-            mse = nn.MSELoss()(outputs['reconstructed'], outputs['input'])
-            if mse == 0:
-                return torch.tensor(float('inf'))
-            return 10 * torch.log10(1.0 ** 2 / mse)
-        except Exception as e:
-            print(f"Warning: PSNR computation failed: {e}")
-            return torch.tensor(0.0)
-    else:
-        return torch.tensor(0.0)
-
-
-def compute_reconstruction_error(outputs):
-    """Compute reconstruction error (MSE)"""
-    if ('reconstructed' in outputs and 'input' in outputs and
-        isinstance(outputs['reconstructed'], torch.Tensor) and
-        isinstance(outputs['input'], torch.Tensor)):
-        try:
-            return nn.MSELoss()(outputs['reconstructed'], outputs['input'])
-        except Exception as e:
-            print(f"Warning: Reconstruction error computation failed: {e}")
-            return torch.tensor(0.0)
-    else:
-        return torch.tensor(0.0)
-
-
-def compute_feature_magnitude(outputs):
-    """Compute average magnitude of features"""
-    if 'features' in outputs:
-        features = outputs['features']
-
-        # Handle different feature types
-        if isinstance(features, list):
-            # Multi-scale features (e.g., FastFlow, STFPM)
-            total_magnitude = 0
-            total_elements = 0
-
-            for feat in features:
-                if isinstance(feat, torch.Tensor):
-                    magnitude = torch.mean(torch.abs(feat))
-                    total_magnitude += magnitude
-                    total_elements += 1
-
-            if total_elements > 0:
-                return total_magnitude / total_elements
-            else:
-                return torch.tensor(0.0)
-
-        elif isinstance(features, torch.Tensor):
-            # Single feature tensor (e.g., VAE, Vanilla AE)
-            return torch.mean(torch.abs(features))
-        else:
-            return torch.tensor(0.0)
-    else:
-        return torch.tensor(0.0)
-
-
-def compute_log_prob_metric(outputs):
-    """Compute average log probability for flow-based models"""
-    if 'log_probs' in outputs and isinstance(outputs['log_probs'], list):
-        try:
-            total_log_prob = 0
-            total_elements = 0
-
-            for log_prob in outputs['log_probs']:
-                if isinstance(log_prob, torch.Tensor):
-                    # Average over spatial dimensions
-                    avg_log_prob = torch.mean(log_prob)
-                    total_log_prob += avg_log_prob
-                    total_elements += 1
-
-            if total_elements > 0:
-                return total_log_prob / total_elements
-            else:
-                return torch.tensor(0.0)
-
-        except Exception as e:
-            print(f"Warning: Log probability computation failed: {e}")
-            return torch.tensor(0.0)
-    else:
-        return torch.tensor(0.0)
-
-
-def compute_nll_metric(outputs):
-    """Compute negative log likelihood for flow-based models"""
-    log_prob = compute_log_prob_metric(outputs)
-    return -log_prob
-
-
-def compute_latent_magnitude(outputs):
-    """Compute average magnitude of latent representation"""
-    # Handle different latent representations
-    latent_keys = ['latent', 'z', 'mu']
-
-    for key in latent_keys:
-        if key in outputs:
-            latent = outputs[key]
-
-            if isinstance(latent, list):
-                # Multi-scale latent features
-                total_magnitude = 0
-                total_elements = 0
-
-                for lat in latent:
-                    if isinstance(lat, torch.Tensor):
-                        magnitude = torch.mean(torch.abs(lat))
-                        total_magnitude += magnitude
-                        total_elements += 1
-
-                if total_elements > 0:
-                    return total_magnitude / total_elements
-
-            elif isinstance(latent, torch.Tensor):
-                # Single latent tensor
-                return torch.mean(torch.abs(latent))
-
-    return torch.tensor(0.0)
-    """Compute average magnitude of latent representation"""
-    # Handle different latent representations
-    latent_keys = ['latent', 'z', 'mu']
-
-    for key in latent_keys:
-        if key in outputs:
-            latent = outputs[key]
-
-            if isinstance(latent, list):
-                # Multi-scale latent features
-                total_magnitude = 0
-                total_elements = 0
-
-                for lat in latent:
-                    if isinstance(lat, torch.Tensor):
-                        magnitude = torch.mean(torch.abs(lat))
-                        total_magnitude += magnitude
-                        total_elements += 1
-
-                if total_elements > 0:
-                    return total_magnitude / total_elements
-
-            elif isinstance(latent, torch.Tensor):
-                # Single latent tensor
-                return torch.mean(torch.abs(latent))
-
-    return torch.tensor(0.0)
-
-
-# Utility functions for creating loss configurations
-def create_vanilla_ae_loss_config(reconstruction_loss='mse', reconstruction_weight=1.0):
-    """Create loss configuration for vanilla autoencoder"""
-    from model import ReconstructionLoss
-
-    return {
-        'reconstruction': {
-            'fn': ReconstructionLoss(reconstruction_loss),
-            'weight': reconstruction_weight
+    def save_checkpoint(self, filepath):
+        """Save model checkpoint"""
+        checkpoint = {
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'history': self.history,
         }
-    }
+        if self.scheduler is not None:
+            checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
+            
+        torch.save(checkpoint, filepath)
+        self.log(f"Checkpoint saved to {filepath}")
+
+    def load_checkpoint(self, filepath):
+        """Load model checkpoint"""
+        checkpoint = torch.load(filepath, map_location=self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.history = checkpoint['history']
+        
+        if self.scheduler is not None and 'scheduler_state_dict' in checkpoint:
+            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            
+        self.log(f"Checkpoint loaded from {filepath}")
 
 
-def create_vae_loss_config(reconstruction_loss='mse', reconstruction_weight=1.0, kl_weight=0.1):
-    """Create loss configuration for VAE"""
-    from model import ReconstructionLoss, KLDivergenceLoss
-
-    return {
-        'reconstruction': {
-            'fn': ReconstructionLoss(reconstruction_loss),
-            'weight': reconstruction_weight
-        },
-        'kl_divergence': {
-            'fn': KLDivergenceLoss(),
-            'weight': kl_weight
-        }
-    }
-
-
-def create_memory_bank_loss_config(distance_weight=1.0):
-    """Create loss configuration for memory bank models"""
-    from model import MemoryDistanceLoss
-
-    return {
-        'memory_distance': {
-            'fn': MemoryDistanceLoss(),
-            'weight': distance_weight
-        }
-    }
-
-
-def create_padim_loss_config():
-    """Create loss configuration for PaDiM (no gradient-based training)"""
-    return {
-        'dummy': {
-            'fn': lambda x, y: torch.tensor(0.0, requires_grad=True),
-            'weight': 1.0
-        }
-    }
-
-
-def create_fastflow_loss_config(nll_weight=1.0):
-    """Create loss configuration for FastFlow"""
-    # FastFlow uses its own compute_loss method, so we provide a dummy config
-    return {
-        'nll': {
-            'fn': lambda pred, target: torch.tensor(0.0, requires_grad=True),
-            'weight': nll_weight
-        }
-    }
-
-
-def create_stfpm_loss_config(feature_weights=None):
-    """Create loss configuration for STFPM"""
-    from stfpm_model import STFPMLoss
-
-    return {
-        'feature_matching': {
-            'fn': STFPMLoss(feature_weights),
-            'weight': 1.0
-        }
-    }
-
-
-# Utility function for creating metric configurations
-def create_standard_metrics():
-    """Create standard metrics for anomaly detection models"""
-    return {
-        'ssim': compute_ssim_metric,
-        'psnr': compute_psnr_metric,
-        'recon_error': compute_reconstruction_error,
-        'feature_mag': compute_feature_magnitude,
-        'latent_mag': compute_latent_magnitude,
-        'log_prob': compute_log_prob_metric,
-        'nll': compute_nll_metric
-    }
+if __name__ == "__main__":
+    pass
