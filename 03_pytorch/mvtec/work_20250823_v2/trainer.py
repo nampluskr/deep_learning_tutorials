@@ -14,11 +14,12 @@ class Trainer:
         self.model = modeler.model
         self.loss_fn = modeler.loss_fn
         self.metrics = modeler.metrics
+        self.device = modeler.device
+
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.logger = logger
         self.stopper = stopper
-        self.device = next(self.model.parameters()).device
 
     def fit(self, train_loader, num_epochs, valid_loader=None):
         history = {'loss': []}
@@ -28,7 +29,6 @@ class Trainer:
 
         for epoch in range(1, num_epochs + 1):
             start_time = time()
-
             self.model.train()
             train_results = self.run_epoch(train_loader, epoch, num_epochs, 'train')
 
@@ -46,6 +46,20 @@ class Trainer:
             epoch_time = time() - start_time
             # self._log_epoch_summary(epoch, num_epochs, train_results, valid_results, epoch_time)
             # self._update_scheduler(valid_results.get('loss', train_results['loss']))
+
+            if self.stopper is not None:
+                current_loss = valid_results.get('loss', train_results['loss'])
+
+                if hasattr(self.stopper, 'update_metrics'):
+                    current_metrics = {**train_results}
+                    if valid_results:
+                        current_metrics.update(valid_results)
+                    self.stopper.update_metrics(current_metrics)
+
+                should_stop = self.stopper(current_loss, self.model)
+                if should_stop:
+                    self.log(f"Training stopped by stopper at epoch {epoch}")
+                    break
 
         self.log("Training completed!")
         return history
@@ -102,7 +116,7 @@ def get_logger(output_dir):
     return logger
 
 
-def get_optimizer(model, optimizer_type='adam', **optimizer_params):
+def get_optimizer(model, optimizer_type='adamw', **optimizer_params):
     """Factory function to create an optimizer"""
     available_optimizers = ['adam', 'sgd', 'adamw']
     optimizer_type = optimizer_type.lower()

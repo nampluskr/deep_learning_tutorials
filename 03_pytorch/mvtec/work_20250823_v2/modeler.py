@@ -9,11 +9,11 @@ import torch.nn as nn
 
 class Modeler:
     """Wrapper for model, loss function, and metrics"""
-    def __init__(self, model, loss_fn, metrics):
-        self.model = model
+    def __init__(self, model, loss_fn, metrics, device=None):
+        self.model = model if device is None else model.to(device)
         self.loss_fn = loss_fn
         self.metrics = metrics
-
+        self.device = next(self.model.parameters()).device
 
 def get_model(model_name, **model_params):
     """Factory function to create models"""
