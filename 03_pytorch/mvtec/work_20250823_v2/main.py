@@ -30,19 +30,39 @@ def run(config):
     # ###############################################################
     # 2. Load Model / loss_fn / metrics
     # ###############################################################
-
-    model = get_model('vanilla_ae', latent_dim=512, img_size=256)
-    loss_fn = get_loss_fn('combined')
-    metrics = {"ssim": get_metric('ssim'), "psnr": get_metric('psnr')}
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # model = get_model('vanilla_ae', latent_dim=512, img_size=256)
+    # loss_fn = get_loss_fn('combined')
+    # metrics = {"ssim": get_metric('ssim'), "psnr": get_metric('psnr')}
+
+    # Fast Flow
+    # model = get_model("fastflow", backbone="resnet34", layers=["layer2","layer3"])
+    # loss_fn = get_loss_fn("fastflow")
+    # metrics = {
+    #     "log_prob": get_metric("fastflow_log_prob"),
+    #     "anomaly_score": get_metric("fastflow_anomaly_score")
+    # }
+
+    # PatchCore
+    # model = get_model("patchcore", backbone="resnet18", layers=["layer2","layer3"])
+    # model.to(device)
+    # model.build_memory_bank(train_loader, device)
+    # loss_fn = get_loss_fn("patchcore")
+    # metrics = {"anomaly_score": get_metric("patchcore_anomaly_score")}
+    
+    # STFPM
+    model = get_model("stfpm", backbone="resnet18", layers=["layer1","layer2","layer3"])
+    loss_fn = get_loss_fn("stfpm")
+    metrics = {"anomaly_score": get_metric("stfpm_anomaly_score")}
+
     modeler = Modeler(model, loss_fn, metrics, device)
 
     # ###############################################################
     # 3. Train Model on Train Dataset
     # ###############################################################
 
-    optimizer = get_optimizer(model, "adamw", lr=0.001, weight_decay=1e-5)
+    optimizer = get_optimizer(model, "adamw", lr=1e-4, weight_decay=1e-5)
     scheduler = get_scheduler(optimizer, "plateau")
     logger = get_logger("./experments")
     stopper = get_stopper("stop", max_epoch=5)

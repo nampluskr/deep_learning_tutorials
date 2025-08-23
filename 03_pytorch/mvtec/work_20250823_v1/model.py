@@ -72,6 +72,13 @@ def get_model(model_name, **model_params):
             hidden_dim=fastflow_params['hidden_dim'],
             weights_path=fastflow_params['weights_path']
         )
+    
+    elif model_name == 'stfpm':
+        model = STFPM(
+            backbone=model_params.get('backbone','resnet18'),
+            layers=model_params.get('layers',['layer1','layer2','layer3']),
+            weights_path=model_params.get('weights_path', None)
+        )
 
     else:
         raise ValueError(f"Unknown model name: {model_name}. Available models: {available_models}")
