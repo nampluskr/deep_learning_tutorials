@@ -133,6 +133,15 @@ class VanillaAE(nn.Module):
             for metric_name, metric_fn in metrics.items():
                 results[metric_name] = float(metric_fn(preds, targets))
         return results
+    
+    @torch.no_grad()
+    def predict_step(self, data, device):
+        inputs = data["image"].to(device)
+        outputs = self.forward(inputs)
+        preds = outputs["reconstructed"]
+        # MSE per-image
+        scores = torch.mean((preds - inputs) ** 2, dim=[1, 2, 3])
+        return scores
 
 
 class VAEEncoder(nn.Module):
@@ -252,6 +261,15 @@ class VAE(nn.Module):
                 else:
                     results[metric_name] = metric_fn(preds, targets)
         return results
+    
+    @torch.no_grad()
+    def predict_step(self, data, device):
+        inputs = data["image"].to(device)
+        outputs = self.forward(inputs)
+        preds = outputs["reconstructed"]
+        # MSE per-image (KL term은 anomaly score에 직접 반영 X)
+        scores = torch.mean((preds - inputs) ** 2, dim=[1, 2, 3])
+        return scores
 
 
 # Loss Functions

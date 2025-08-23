@@ -49,7 +49,7 @@ class MVTecDataset(Dataset):
 
         label = torch.tensor(self.labels[idx]).long()
 
-        return {"image": image, "label": label}
+        return {"image": image, "label": label, "input": image, "target": image}
 
 
 def get_transforms(img_size=256):

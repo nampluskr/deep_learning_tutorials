@@ -8,6 +8,8 @@ from stopper import get_stopper
 
 def run(config):
 
+    logger = get_logger("./experments")
+
     # ###############################################################
     # 1. Load Dataloders
     # ###############################################################
@@ -32,9 +34,9 @@ def run(config):
     # ###############################################################
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # model = get_model('vanilla_ae', latent_dim=512, img_size=256)
-    # loss_fn = get_loss_fn('combined')
-    # metrics = {"ssim": get_metric('ssim'), "psnr": get_metric('psnr')}
+    model = get_model('vanilla_ae', latent_dim=512, img_size=256)
+    loss_fn = get_loss_fn('combined')
+    metrics = {"ssim": get_metric('ssim'), "psnr": get_metric('psnr')}
 
     # Fast Flow
     # model = get_model("fastflow", backbone="resnet34", layers=["layer2","layer3"])
@@ -52,9 +54,9 @@ def run(config):
     # metrics = {"anomaly_score": get_metric("patchcore_anomaly_score")}
     
     # STFPM
-    model = get_model("stfpm", backbone="resnet18", layers=["layer1","layer2","layer3"])
-    loss_fn = get_loss_fn("stfpm")
-    metrics = {"anomaly_score": get_metric("stfpm_anomaly_score")}
+    # model = get_model("stfpm", backbone="resnet18", layers=["layer1","layer2","layer3"])
+    # loss_fn = get_loss_fn("stfpm")
+    # metrics = {"anomaly_score": get_metric("stfpm_anomaly_score")}
 
     modeler = Modeler(model, loss_fn, metrics, device)
 
@@ -64,7 +66,6 @@ def run(config):
 
     optimizer = get_optimizer(model, "adamw", lr=1e-4, weight_decay=1e-5)
     scheduler = get_scheduler(optimizer, "plateau")
-    logger = get_logger("./experments")
     stopper = get_stopper("stop", max_epoch=5)
 
     trainer = Trainer(modeler, optimizer, scheduler, logger, stopper)
