@@ -10,13 +10,11 @@ from copy import deepcopy
 
 
 class Trainer:
+    """Trainer wrapper for training, validation, and prediction"""
     def __init__(self, modeler, optimizer, scheduler=None, logger=None, stopper=None):
-        self.modeler = modeler,
+        self.modeler = modeler
         self.model = modeler.model
-        self.loss_fn = modeler.loss_fn
         self.metrics = modeler.metrics
-        self.device = modeler.device
-
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.logger = logger
@@ -24,30 +22,27 @@ class Trainer:
 
     def fit(self, train_loader, num_epochs, valid_loader=None):
         history = {'loss': []}
-        history.update({name: [] for name in self.metrics.keys()})
+        history.update({name: [] for name in self.metrics})
         if valid_loader is not None:
-            history.update({f"val_{name}": [] for name in ['loss'] + list(self.metrics.keys())})
+            history.update({f"val_{name}": [] for name in ['loss'] + self.metrics})
 
         for epoch in range(1, num_epochs + 1):
             start_time = time()
-            self.model.train()
-            train_results = self.run_epoch(train_loader, epoch, num_epochs, 'train')
+            train_results = self.run_epoch(train_loader, epoch, num_epochs, mode='train')
 
             for key, value in train_results.items():
                 history[key].append(value)
 
             valid_results = {}
             if valid_loader is not None:
-                self.model.eval()
-                valid_results = self.run_epoch(valid_loader, epoch, num_epochs, 'valid')
-
+                valid_results = self.run_epoch(valid_loader, epoch, num_epochs, mode='valid')
                 for key, value in valid_results.items():
                     history[f"val_{key}"].append(value)
 
             epoch_time = time() - start_time
-            # self._log_epoch_summary(epoch, num_epochs, train_results, valid_results, epoch_time)
-            # self._update_scheduler(valid_results.get('loss', train_results['loss']))
+            self.log(f"Epoch {epoch}/{num_epochs} - time: {epoch_time:.1f}s")
 
+            # stopper check
             if self.stopper is not None:
                 current_loss = valid_results.get('loss', train_results['loss'])
 
@@ -67,31 +62,49 @@ class Trainer:
 
     def run_epoch(self, data_loader, epoch, num_epochs, mode):
         total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.metrics.keys()}
+        total_metrics = {name: 0.0 for name in self.metrics}
         num_batches = 0
 
-        desc=f"{mode.capitalize()} [{epoch}/{num_epochs}]"
+        desc = f"{mode.capitalize()} [{epoch}/{num_epochs}]"
         with tqdm(data_loader, desc=desc, leave=True) as pbar:
-            for data in pbar:
+            for inputs in pbar:
                 if mode == 'train':
-                    batch_results = self.modeler.train_step(data,
-                        self.optimizer, self.loss_fn, self.metrics, self.device)
+                    batch_results = self.modeler.train_step(inputs, self.optimizer)
                 else:
-                    batch_results = self.modeler.validate_step(data,
-                        self.loss_fn, self.metrics, self.device)
+                    batch_results = self.modeler.validate_step(inputs)
 
                 total_loss += batch_results['loss']
-                for metric_name in self.metrics.keys():
+                for metric_name in self.metrics:
                     total_metrics[metric_name] += batch_results[metric_name]
                 num_batches += 1
 
                 avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches for name in self.metrics.keys()}
-                pbar.set_postfix({'loss': f"{avg_loss:.3f}", **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
+                avg_metrics = {name: total_metrics[name] / num_batches for name in self.metrics}
+                pbar.set_postfix({
+                    'loss': f"{avg_loss:.3f}",
+                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}
+                })
 
         results = {'loss': total_loss / num_batches}
-        results.update({name: total_metrics[name] / num_batches for name in self.metrics.keys()})
+        results.update({name: total_metrics[name] / num_batches for name in self.metrics})
         return results
+
+    @torch.no_grad()
+    def predict(self, test_loader):
+        self.model.eval()
+        all_scores, all_labels = [], []
+
+        for inputs in tqdm(test_loader, desc="Predict"):
+            scores = self.modeler.predict_step(inputs)
+            labels = inputs["label"]
+
+            all_scores.append(scores.cpu())
+            all_labels.append(labels.cpu())
+
+        return {
+            "score": torch.cat(all_scores, dim=0),
+            "label": torch.cat(all_labels, dim=0)
+        }
 
     def log(self, message, level='info'):
         if self.logger:

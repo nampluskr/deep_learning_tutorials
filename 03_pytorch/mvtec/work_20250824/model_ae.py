@@ -110,16 +110,17 @@ class VanillaAE(nn.Module):
         targets = outputs['input']
         return combined_loss(preds, targets)
 
-    @torch.no_grad()
     def compute_metrics(self, outputs):
         preds = outputs['reconstructed']
         targets = outputs['input']
         return {
-            'psnr': psnr_metric(preds, targets).item(),
-            'ssim': ssim_metric(preds, targets).item(),
+            'psnr': float(psnr_metric(preds, targets)),
+            'ssim': float(ssim_metric(preds, targets)),
         }
 
-    @torch.no_grad()
+    def get_metrics(self):
+        return ['psnr', 'ssim']
+
     def compute_anomaly_scores(self, outputs):
         preds = outputs["reconstructed"]
         targets = outputs["input"]
@@ -215,18 +216,17 @@ class VAE(nn.Module):
         mu, logvar = outputs['mu'], outputs['logvar']
         return vae_loss(preds, targets, mu, logvar)
 
-    @torch.no_grad()
     def compute_metrics(self, outputs):
         preds = outputs['reconstructed']
         targets = outputs['input']
-        mu, logvar = outputs['mu'], outputs['logvar']
         return {
-            'psnr': psnr_metric(preds, targets).item(),
-            'ssim': ssim_metric(preds, targets).item(),
-            'vae_loss': vae_loss(preds, targets, mu, logvar).item()
+            'psnr': float(psnr_metric(preds, targets)),
+            'ssim': float(ssim_metric(preds, targets)),
         }
 
-    @torch.no_grad()
+    def get_metrics(self):
+        return ['psnr', 'ssim']
+
     def compute_anomaly_scores(self, outputs):
         preds = outputs['reconstructed']
         targets = outputs['input']
