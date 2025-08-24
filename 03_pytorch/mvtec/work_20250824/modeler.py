@@ -11,7 +11,7 @@ from model_ae import (
 
 
 class Modeler:
-    """Wrapper for model, loss function, and metrics"""
+    """Wrapper for model"""
     def __init__(self, model, device=None):
         self.model = model if device is None else model.to(device)
         self.device = next(self.model.parameters()).device

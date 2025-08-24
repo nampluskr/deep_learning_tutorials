@@ -109,23 +109,6 @@ class Trainer:
         results.update({name: total_metrics[name] / num_batches for name in self.metrics})
         return results
 
-    @torch.no_grad()
-    def predict(self, test_loader):
-        self.model.eval()
-        all_scores, all_labels = [], []
-
-        for inputs in tqdm(test_loader, desc="Predict"):
-            scores = self.modeler.predict_step(inputs)
-            labels = inputs["label"]
-
-            all_scores.append(scores.cpu())
-            all_labels.append(labels.cpu())
-
-        return {
-            "score": torch.cat(all_scores, dim=0),
-            "label": torch.cat(all_labels, dim=0)
-        }
-
     def log(self, message, level='info'):
         if self.logger:
             getattr(self.logger, level, self.logger.info)(message)

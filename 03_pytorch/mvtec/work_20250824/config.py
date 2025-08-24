@@ -1,45 +1,86 @@
-from dataclasses import dataclass, field
-from typing import List
+import torch
+from dataclasses import dataclass, field, asdict, is_dataclass
+from typing import List, Dict, Any
+
+
+@dataclass
+class DataConfig:
+    data_dir: str = '/mnt/d/datasets/mvtec'
+    categories: List[str] = field(default_factory=lambda: ['bottle'])
+    img_size: int = 256
+    batch_size: int = 32
+    valid_ratio: float = 0.2
+
+
+@dataclass
+class ModelConfig:
+    model_type: str = "vanilla_ae"
+    model_params: Dict[str, Any] = field(default_factory=lambda: {
+        "in_channels": 3,
+        "out_channels": 3,
+        "latent_dim": 512,
+        "img_size": 256,
+    })
+
+
+@dataclass
+class TrainConfig:
+    num_epochs: int = 50
+
+    # optimizer
+    optimizer_type: str = 'adamw'
+    optimizer_params: Dict[str, Any] = field(default_factory=lambda: {
+        "lr": 1e-4,
+        "weight_decay": 1e-5
+    })
+
+    # scheduler
+    scheduler_type: str = 'plateau'
+    scheduler_params: Dict[str, Any] = field(default_factory=lambda: {
+        "mode": "min",
+        "factor": 0.5,
+        "patience": 5
+    })
+
+    # stopper
+    stopper_type: str = 'stop'
+    stopper_params: Dict[str, Any] = field(default_factory=lambda: {
+        "max_epoch": 5
+    })
 
 
 @dataclass
 class Config:
-    """Configuration class for anomaly detection experiments"""
-    
-    # Data configuration
-    data_dir: str = '/mnt/d/datasets/mvtec'
-    categories: List[str] = field(default_factory=lambda: ['bottle', 'cable', 'capsule'])
-    img_size: int = 256
-    batch_size: int = 32
-    valid_ratio: float = 0.2
     seed: int = 42
-    
-    # Model configuration
-    in_channels: int = 3
-    out_channels: int = 3
-    latent_dim: int = 512
-    
-    # Training configuration
-    num_epochs: int = 50
-    learning_rate: float = 1e-4
-    weight_decay: float = 1e-5
-    optimizer_type: str = 'adamw'
-    scheduler_type: str = 'reduce_plateau'
-    
-    # Loss configuration
-    loss_type: str = 'combined'
-    mse_weight: float = 0.7
-    ssim_weight: float = 0.3
-    beta: float = 1.0  # For VAE
-    
-    # Early stopping configuration
-    patience: int = 10
-    min_delta: float = 1e-4
-    restore_best_weights: bool = True
-    
-    # Metric configuration
-    metric_names: List[str] = field(default_factory=lambda: ['mse', 'ssim', 'psnr'])
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    output_dir: str = "./experiments"
 
+    data: DataConfig = field(default_factory=DataConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    train: TrainConfig = field(default_factory=TrainConfig)
+
+
+def print_config(config, show_all=True, indent=2):
+
+    def _print_dict(d, prefix=""):
+        for key, value in d.items():
+            if isinstance(value, dict):
+                print(f"{prefix}{key}:")
+                _print_dict(value, prefix + " " * indent)
+            else:
+                print(f"{prefix}{key}: {value}")
+
+    if is_dataclass(config):
+        config_dict = asdict(config)
+    elif isinstance(config, dict):
+        config_dict = config
+    else:
+        raise ValueError("config must be a dataclass or dict")
+
+    print("===== Experiment Config =====")
+    _print_dict(config_dict)
+    print("=============================")
 
 if __name__ == "__main__":
-    pass
+    cfg = Config()
+    print_config(TrainConfig())
