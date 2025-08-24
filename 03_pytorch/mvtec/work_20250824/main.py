@@ -1,13 +1,15 @@
-import torch
 from config import Config
 from data import MVTecDataset, get_transforms, get_dataloader, split_train_valid
 from modeler import Modeler, get_model
 from trainer import Trainer, get_optimizer, get_scheduler, get_logger
+from trainer import set_seed, get_device
 from stopper import get_stopper
 
 
 def run(config):
 
+    set_seed(config.seed)
+    config.device = get_device()
     logger = get_logger("./experments")
 
     # ###############################################################
@@ -33,10 +35,9 @@ def run(config):
     # 2. Load Model / loss_fn / metrics
     # ###############################################################
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # model = get_model('vanilla_ae', latent_dim=512, img_size=256)
     model = get_model('vae', latent_dim=512, img_size=256)
-    modeler = Modeler(model, device)
+    modeler = Modeler(model, config.device)
 
     # ###############################################################
     # 3. Train Model on Train Dataset
