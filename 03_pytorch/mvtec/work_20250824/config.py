@@ -60,9 +60,9 @@ class Config:
     train: TrainConfig = field(default_factory=TrainConfig)
 
 
-def print_config(config, show_all=True, indent=2):
+def print_config(config):
 
-    def _print_dict(d, prefix=""):
+    def _print_dict(d, prefix="", indent=2):
         for key, value in d.items():
             if isinstance(value, dict):
                 print(f"{prefix}{key}:")
@@ -78,7 +78,7 @@ def print_config(config, show_all=True, indent=2):
         raise ValueError("config must be a dataclass or dict")
 
     print("===== Experiment Config =====")
-    _print_dict(config_dict)
+    _print_dict(config_dict, indent=2)
     print("=============================")
 
 if __name__ == "__main__":
