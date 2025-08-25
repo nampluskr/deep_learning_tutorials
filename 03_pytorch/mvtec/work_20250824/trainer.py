@@ -49,6 +49,8 @@ class Trainer:
         for epoch in range(1, num_epochs + 1):
             start_time = time()
             train_results = self.run_epoch(train_loader, epoch, num_epochs, mode='train')
+            train_info = ", ".join([f'{key}={value:.3f}'
+                                    for key, value in train_results.items()])
 
             for key, value in train_results.items():
                 history[key].append(value)
@@ -56,11 +58,19 @@ class Trainer:
             valid_results = {}
             if valid_loader is not None:
                 valid_results = self.run_epoch(valid_loader, epoch, num_epochs, mode='valid')
+                valid_info = ", ".join([f'{key}={value:.3f}'
+                                        for key, value in valid_results.items()])
+
                 for key, value in valid_results.items():
                     history[f"val_{key}"].append(value)
-
-            epoch_time = time() - start_time
-            self.log(f"Epoch {epoch}/{num_epochs} - time: {epoch_time:.1f}s")
+                    
+                elapsed_time = time() - start_time
+                self.log(f" [{epoch:2d}/{num_epochs}] "
+                    f"{train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
+            else:
+                elapsed_time = time() - start_time
+                self.log(f" [{epoch:2d}/{num_epochs}] "
+                        f"{train_info} ({elapsed_time:.1f}s)")
 
             # stopper check
             if self.stopper is not None:
@@ -86,7 +96,7 @@ class Trainer:
         num_batches = 0
 
         desc = f"{mode.capitalize()} [{epoch}/{num_epochs}]"
-        with tqdm(data_loader, desc=desc, leave=True) as pbar:
+        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
             for inputs in pbar:
                 if mode == 'train':
                     batch_results = self.modeler.train_step(inputs, self.optimizer)

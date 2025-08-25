@@ -18,7 +18,7 @@ class ModelConfig:
     model_params: Dict[str, Any] = field(default_factory=lambda: {
         "in_channels": 3,
         "out_channels": 3,
-        "latent_dim": 512,
+        "latent_dim": 256,
         "img_size": 256,
     })
 
@@ -30,7 +30,7 @@ class TrainConfig:
     # optimizer
     optimizer_type: str = 'adamw'
     optimizer_params: Dict[str, Any] = field(default_factory=lambda: {
-        "lr": 1e-4,
+        "lr": 1e-3,
         "weight_decay": 1e-5
     })
 
@@ -45,7 +45,7 @@ class TrainConfig:
     # stopper
     stopper_type: str = 'stop'
     stopper_params: Dict[str, Any] = field(default_factory=lambda: {
-        "max_epoch": 5
+        "max_epoch": 50
     })
 
 

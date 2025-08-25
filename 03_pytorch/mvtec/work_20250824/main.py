@@ -11,19 +11,20 @@ config1 = Config(
     output_dir="./experiments",
     data=DataConfig(),
     model=ModelConfig(model_type="vanilla_ae"),
-    train=TrainConfig(num_epochs=3),
+    train=TrainConfig(num_epochs=10),
 )
 config2 = Config(
     output_dir="./experiments",
     data=DataConfig(),
     model=ModelConfig(model_type="vae"),
-    train=TrainConfig(num_epochs=3),
+    train=TrainConfig(num_epochs=10),
 )
 config_list = [config1, config2]
 
 
 def run(config):
     print_config(config.model)
+    print_config(config.train)
     set_seed(config.seed)
     config.device = get_device()
     logger = get_logger(config.output_dir)
@@ -47,8 +48,8 @@ def run(config):
         seed=config.seed
     )
     train_loader = get_dataloader(train_dataset, config.data.batch_size, 'train')
-    valid_loader = get_dataloader(valid_dataset, 16, 'valid')
-    test_loader = get_dataloader(test_dataset, 16, 'test')
+    valid_loader = get_dataloader(valid_dataset, config.data.batch_size, 'valid')
+    test_loader = get_dataloader(test_dataset, config.data.batch_size, 'test')
 
     # ###############################################################
     # 2. Load Model / loss_fn / metrics
@@ -72,15 +73,15 @@ def run(config):
     trainer = Trainer(modeler, optimizer, scheduler, logger, stopper)
     history = trainer.fit(train_loader, num_epochs=config.train.num_epochs,
         valid_loader=valid_loader)
-    print(history)
-    
+    # print(history)
+
     # ###############################################################
     # 4. Evaluate Model on Test Dataset
     # ###############################################################
 
     evaluator = Evaluator(modeler)
     results = evaluator.predict(test_loader)
-    print(results)
+    # print(results)
 
 if __name__ == "__main__":
 

@@ -10,12 +10,13 @@ class Evaluator:
     def predict(self, test_loader):
         all_scores, all_labels = [], []
 
-        for inputs in tqdm(test_loader, desc="Evaluate"):
-            scores = self.modeler.predict_step(inputs)
-            labels = inputs["label"]
+        with tqdm(test_loader, desc="Evaluate", leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                scores = self.modeler.predict_step(inputs)
+                labels = inputs["label"]
 
-            all_scores.append(scores.cpu())
-            all_labels.append(labels.cpu())
+                all_scores.append(scores.cpu())
+                all_labels.append(labels.cpu())
 
         return {
             "score": torch.cat(all_scores, dim=0),
