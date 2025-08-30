@@ -1,10 +1,10 @@
 import torch
 from torchvision.transforms import v2
 
-from dataset_mvtec import MVTecDataloader
-from dataset_btad import BTADDataloader
-from dataset_visa import VisADataloader
-from dataset_oled import OLEDDataloader
+from .dataset_mvtec import MVTecDataloader
+from .dataset_btad import BTADDataloader
+from .dataset_visa import VisADataloader
+from .dataset_oled import OLEDDataloader
 
 
 def get_dataloader(name, **params):
