@@ -6,6 +6,8 @@ from collections import OrderedDict
 from collections.abc import Sequence
 import timm
 import os
+from abc import ABC
+from typing import Any
 
 try:
     from torchvision.models.feature_extraction import create_feature_extractor
@@ -164,6 +166,126 @@ def get_feature_extractor(backbone="resnet18", layers=["layer1", "layer2", "laye
         pre_trained=pre_trained,
         requires_grad=requires_grad
     )
+
+
+class DynamicBufferMixin(nn.Module, ABC):
+    """Mixin that enables loading state dicts with mismatched tensor shapes."""
+    
+    def get_tensor_attribute(self, attribute_name: str) -> torch.Tensor:
+        """Get a tensor attribute by name."""
+        attribute = getattr(self, attribute_name)
+        if isinstance(attribute, torch.Tensor):
+            return attribute
+        msg = f"Attribute with name '{attribute_name}' is not a torch Tensor"
+        raise ValueError(msg)
+        
+    def _load_from_state_dict(self, state_dict: dict, prefix: str, *args) -> None:
+        """Load a state dictionary, resizing buffers if shapes don't match."""
+        persistent_buffers = {k: v for k, v in self._buffers.items() if k not in self._non_persistent_buffers_set}
+        local_buffers = {k: v for k, v in persistent_buffers.items() if v is not None}
+        for param in local_buffers:
+            for key in state_dict:
+                if (
+                    key.startswith(prefix)
+                    and key[len(prefix) :].split(".")[0] == param
+                    and local_buffers[param].shape != state_dict[key].shape
+                ):
+                    attribute = self.get_tensor_attribute(param)
+                    attribute.resize_(state_dict[key].shape)
+        super()._load_from_state_dict(state_dict, prefix, *args)
+
+
+class MultiVariateGaussian(DynamicBufferMixin, nn.Module):
+    """Multi Variate Gaussian Distribution."""
+
+    def __init__(self) -> None:
+        """Initialize empty buffers for mean and inverse covariance."""
+        super().__init__()
+
+        self.register_buffer("mean", torch.empty(0))
+        self.register_buffer("inv_covariance", torch.empty(0))
+
+        self.mean: torch.Tensor
+        self.inv_covariance: torch.Tensor
+
+    @staticmethod
+    def _cov(
+        observations: torch.Tensor,
+        rowvar: bool = False,
+        bias: bool = False,
+        ddof: int | None = None,
+        aweights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Estimate covariance matrix similar to numpy.cov."""
+        # ensure at least 2D
+        if observations.dim() == 1:
+            observations = observations.view(-1, 1)
+
+        # treat each column as a data point, each row as a variable
+        if rowvar and observations.shape[0] != 1:
+            observations = observations.t()
+
+        if ddof is None:
+            ddof = 1 if bias == 0 else 0
+
+        weights = aweights
+        weights_sum: Any
+
+        if weights is not None:
+            if not torch.is_tensor(weights):
+                weights = torch.tensor(weights, dtype=torch.float)
+            weights_sum = torch.sum(weights)
+            avg = torch.sum(observations * (weights / weights_sum)[:, None], 0)
+        else:
+            avg = torch.mean(observations, 0)
+
+        # Determine the normalization
+        if weights is None:
+            fact = observations.shape[0] - ddof
+        elif ddof == 0:
+            fact = weights_sum
+        elif aweights is None:
+            fact = weights_sum - ddof
+        else:
+            fact = weights_sum - ddof * torch.sum(weights * weights) / weights_sum
+
+        observations_m = observations.sub(avg.expand_as(observations))
+
+        x_transposed = observations_m.t() if weights is None else torch.mm(torch.diag(weights), observations_m).t()
+
+        covariance = torch.mm(x_transposed, observations_m)
+        covariance = covariance / fact
+
+        return covariance.squeeze()
+
+    def forward(self, embedding: torch.Tensor) -> list[torch.Tensor]:
+        """Calculate multivariate Gaussian distribution parameters."""
+        device = embedding.device
+
+        batch, channel, height, width = embedding.size()
+        embedding_vectors = embedding.view(batch, channel, height * width)
+        self.mean = torch.mean(embedding_vectors, dim=0)
+        covariance = torch.zeros(size=(channel, channel, height * width), device=device)
+        identity = torch.eye(channel).to(device)
+        for i in range(height * width):
+            covariance[:, :, i] = self._cov(embedding_vectors[:, :, i], rowvar=False) + 0.01 * identity
+
+        # Stabilize the covariance matrix by adding a small regularization term
+        stabilized_covariance = covariance.permute(2, 0, 1) + 1e-5 * identity
+
+        # Check if the device is MPS and fallback to CPU if necessary
+        if device.type == "mps":
+            # Move stabilized covariance to CPU for inversion
+            self.inv_covariance = torch.linalg.inv(stabilized_covariance.cpu()).to(device)
+        else:
+            # Calculate inverse covariance as we need only the inverse
+            self.inv_covariance = torch.linalg.inv(stabilized_covariance)
+
+        return [self.mean, self.inv_covariance]
+
+    def fit(self, embedding: torch.Tensor) -> list[torch.Tensor]:
+        """Fit multivariate Gaussian distribution to input embeddings."""
+        return self.forward(embedding)
 
 
 if __name__ == "__main__":

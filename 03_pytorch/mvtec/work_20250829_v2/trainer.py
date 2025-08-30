@@ -46,8 +46,8 @@ def get_logger(output_dir):
 
 def get_optimizer(model, name='adamw', **params):
     available_list = {
-        'adam': optim.Adam, 
-        'sgd': optim.SGD, 
+        'adam': optim.Adam,
+        'sgd': optim.SGD,
         'adamw': optim.AdamW,
     }
     name = name.lower()
@@ -63,17 +63,17 @@ def get_optimizer(model, name='adamw', **params):
 
 def get_scheduler(optimizer, name='plateau', **params):
     available_list = {
-        'step': optim.lr_scheduler.StepLR, 
-        'multi_step': optim.lr_scheduler.MultiStepLR, 
-        'exponential': optim.lr_scheduler.ExponentialLR, 
-        'cosine': optim.lr_scheduler.CosineAnnealingLR, 
-        'plateau': optim.lr_scheduler.ReduceLROnPlateau, 
+        'step': optim.lr_scheduler.StepLR,
+        'multi_step': optim.lr_scheduler.MultiStepLR,
+        'exponential': optim.lr_scheduler.ExponentialLR,
+        'cosine': optim.lr_scheduler.CosineAnnealingLR,
+        'plateau': optim.lr_scheduler.ReduceLROnPlateau,
     }
     name = name.lower()
     if name not in available_list:
         available_names = list(available_list.keys())
         raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
-    
+
     selected = available_list[name]
     default_params = {}
     default_params.update(params)
@@ -89,7 +89,7 @@ def get_stopper(name='early_stop', **params):
     if name not in available_list:
         available_names = list(available_list.keys())
         raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
-    
+
     selected = available_list[name]
     default_params = {}
     default_params.update(params)
@@ -164,7 +164,7 @@ class Trainer:
 
                 for key, value in valid_results.items():
                     history[f"val_{key}"].append(value)
-                    
+
                 elapsed_time = time() - start_time
                 self.log(f" [{epoch:2d}/{num_epochs}] " f"{train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
             else:
@@ -207,6 +207,61 @@ class Trainer:
         results = {'loss': total_loss / num_batches}
         results.update({name: total_metrics[name] / num_batches for name in self.metric_names})
         return results
+
+    @torch.no_grad()
+    def predict(self, test_loader):
+        """Predict anomaly scores on test dataset"""
+        self.model.eval()
+        all_scores, all_labels = [], []
+
+        desc = "Predict"
+        with tqdm(test_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                scores = self.modeler.predict_step(inputs)
+                labels = inputs["label"]
+
+                all_scores.append(scores.cpu())
+                all_labels.append(labels.cpu())
+
+        scores_tensor = torch.cat(all_scores, dim=0)
+        labels_tensor = torch.cat(all_labels, dim=0)
+        return scores_tensor, labels_tensor
+
+    @torch.no_grad()
+    def evaluate(self, test_loader):
+        """Evaluate model and return metrics"""
+        scores, labels = self.predict(test_loader)
+
+        from metrics import get_metric
+        try:
+            auroc_metric = get_metric("auroc")
+            aupr_metric = get_metric("aupr")
+            auroc = auroc_metric(labels, scores)
+            aupr = aupr_metric(labels, scores)
+
+            eval_results = {
+                'auroc': auroc,
+                'aupr': aupr,
+                'num_normal': int((labels == 0).sum()),
+                'num_anomaly': int((labels == 1).sum()),
+                'total_samples': len(labels)
+            }
+            self.log(f"Evaluation Results:")
+            self.log(f" > AUROC: {auroc:.4f}")
+            self.log(f" > AUPR:  {aupr:.4f}")
+            self.log(f" > Normal: {eval_results['num_normal']}, "
+                     f"Anomaly: {eval_results['num_anomaly']}")
+            return eval_results
+
+        except ValueError as e:
+            self.log(f"Cannot compute metrics: {e}")
+            return {
+                'auroc': 0.0,
+                'aupr': 0.0,
+                'num_normal': int((labels == 0).sum()),
+                'num_anomaly': int((labels == 1).sum()),
+                'total_samples': len(labels)
+            }
 
 
 class EarlyStopper:

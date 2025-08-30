@@ -159,6 +159,11 @@ class Trainer:
 
             valid_results = {}
             if valid_loader is not None:
+                # Memory-based 모델의 경우 validation 전에 fitting 수행
+                if hasattr(self.modeler, 'fit') and hasattr(self.modeler, '_fitted') and not self.modeler._fitted:
+                    self.log(" > Fitting model parameters...")
+                    self.modeler.fit()
+
                 valid_results = self.run_epoch(valid_loader, epoch, num_epochs, mode='valid')
                 valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
 
@@ -175,6 +180,11 @@ class Trainer:
 
             if self.check_stopping_condition(epoch, train_results, valid_results):
                 break
+
+        # Final fitting for memory-based models (if not fitted during validation)
+        if hasattr(self.modeler, 'fit') and hasattr(self.modeler, '_fitted') and not self.modeler._fitted:
+            self.log("\n > Fitting model parameters...")
+            self.modeler.fit()
 
         self.log(" > Training completed!")
         return history
@@ -207,6 +217,25 @@ class Trainer:
         results = {'loss': total_loss / num_batches}
         results.update({name: total_metrics[name] / num_batches for name in self.metric_names})
         return results
+    
+    @torch.no_grad()
+    def predict(self, test_loader):
+        """Predict anomaly scores on test dataset"""
+        self.model.eval()
+        all_scores, all_labels = [], []
+
+        desc = "Predict"
+        with tqdm(test_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                scores = self.modeler.predict_step(inputs)
+                labels = inputs["label"]
+
+                all_scores.append(scores.cpu())
+                all_labels.append(labels.cpu())
+
+        scores_tensor = torch.cat(all_scores, dim=0)
+        labels_tensor = torch.cat(all_labels, dim=0)
+        return scores_tensor, labels_tensor
 
 
 class EarlyStopper:

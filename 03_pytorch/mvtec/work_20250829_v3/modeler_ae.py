@@ -13,7 +13,10 @@ class AEModeler(BaseModeler):
         inputs = self.to_device(inputs)
 
         optimizer.zero_grad()
-        reconstructed, latent, features = self.model(inputs['image'])
+        predictions = self.model(inputs['image'])
+        
+        # Training mode: (reconstructed, latent, features)
+        reconstructed, latent, features = predictions
         loss = self.loss_fn(reconstructed, inputs['image'])
         loss.backward()
         optimizer.step()
@@ -30,7 +33,16 @@ class AEModeler(BaseModeler):
         self.model.eval()
         inputs = self.to_device(inputs)
 
-        reconstructed, latent, features = self.model(inputs['image'])
+        predictions = self.model(inputs['image'])  # output → predictions
+        
+        # Inference mode: InferenceBatch(pred_score, anomaly_map)
+        if hasattr(predictions, 'pred_score'):
+            self.model.train()
+            reconstructed, latent, features = self.model(inputs['image'])
+            self.model.eval()
+        else:
+            reconstructed, latent, features = predictions
+
         loss = self.loss_fn(reconstructed, inputs['image'])
 
         results = {'loss': loss.item()}
@@ -41,14 +53,16 @@ class AEModeler(BaseModeler):
 
     @torch.no_grad()
     def predict_step(self, inputs):
-        self.model.eval()
+        self.model.eval()  # Use inference mode for prediction
         inputs = self.to_device(inputs)
 
         predictions = self.model(inputs['image'])
         
+        # Inference mode: InferenceBatch(pred_score, anomaly_map)
         if hasattr(predictions, 'pred_score'):
             return predictions.pred_score
         else:
+            # Fallback: if training mode output
             reconstructed, latent, features = predictions
             scores = torch.mean((inputs['image'] - reconstructed)**2, dim=[1, 2, 3])
             return scores
@@ -60,12 +74,14 @@ class AEModeler(BaseModeler):
         with torch.no_grad():
             predictions = self.model(inputs['image'])
             
+            # Inference mode: InferenceBatch(pred_score, anomaly_map)
             if hasattr(predictions, 'anomaly_map'):
                 return {
                     'anomaly_maps': predictions.anomaly_map,
                     'pred_scores': predictions.pred_score
                 }
             else:
+                # Fallback: if training mode output
                 reconstructed, latent, features = predictions
                 anomaly_maps = torch.mean((inputs['image'] - reconstructed)**2, dim=1, keepdim=True)
                 pred_scores = torch.mean((inputs['image'] - reconstructed)**2, dim=[1, 2, 3])
@@ -87,7 +103,3 @@ class AEModeler(BaseModeler):
             "gradient_clip_val": 0,
             "num_sanity_val_steps": 0
         }
-
-
-if __name__ == "__main__":
-    pass
