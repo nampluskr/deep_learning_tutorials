@@ -139,7 +139,7 @@ class PadimModel(nn.Module):
         self.feature_extractor = TimmFeatureExtractor(
             backbone=self.backbone,
             layers=layers,
-            pre_trained=pre_trained,
+            pre_trained=False,  # 변경
         ).eval()
         self.n_features_original = sum(self.feature_extractor.out_dims)
         self.n_features = n_features or _N_FEATURES_DEFAULTS.get(self.backbone)

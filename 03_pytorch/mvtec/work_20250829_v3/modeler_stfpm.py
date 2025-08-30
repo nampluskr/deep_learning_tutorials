@@ -1,146 +1,108 @@
 import torch
 from torch import optim
-from collections.abc import Sequence
 
 from modeler_base import BaseModeler
-from model_stfpm import STFPMModel, STFPMLoss
 
 
 class STFPMModeler(BaseModeler):
-    
-    def __init__(
-        self,
-        backbone="resnet18",
-        layers=("layer1", "layer2", "layer3"),
-        metrics=None,
-        device=None
-    ):
-        model = STFPMModel(backbone=backbone, layers=layers)
-        loss_fn = STFPMLoss()
-        
+    def __init__(self, model, loss_fn, metrics=None, device=None):
         super().__init__(model, loss_fn, metrics, device)
-        
-        self.backbone = backbone
-        self.layers = layers
-    
+
     def train_step(self, inputs, optimizer):
         self.model.train()
         inputs = self.to_device(inputs)
-        
-        optimizer.zero_grad()
-        teacher_features, student_features = self.model.forward(inputs['image'])
-        
-        loss = self.loss_fn(teacher_features, student_features)
-        
-        loss.backward()
-        optimizer.step()
-        
-        results = {'loss': loss.item()}
-        
+
         with torch.no_grad():
-            for metric_name, metric_fn in self.metrics.items():
-                metric_value = metric_fn(teacher_features, student_features)
-                results[metric_name] = float(metric_value)
+            predictions = self.model(inputs['image'])
         
+        # Memory bank 상태 모니터링
+        current_samples = len(self.model.memory_bank)
+        if current_samples > 0:
+            latest_embedding = self.model.memory_bank[-1]
+            embedding_mean = latest_embedding.mean().item()
+            embedding_std = latest_embedding.std().item()
+            embedding_shape = latest_embedding.shape
+        else:
+            embedding_mean = 0.0
+            embedding_std = 0.0
+            embedding_shape = "N/A"
+        
+        results = {
+            'loss': 0.0,
+            'memory_samples': current_samples,
+            'embedding_mean': embedding_mean,
+            'embedding_std': embedding_std,
+        }
         return results
-    
+
     @torch.no_grad()
     def validate_step(self, inputs):
-        self.model.eval()
+        self.model.train()
         inputs = self.to_device(inputs)
-        
+
         predictions = self.model(inputs['image'])
         
-        if hasattr(predictions, 'anomaly_map'):
-            anomaly_maps = predictions.anomaly_map
-            pred_scores = predictions.pred_score
-        else:
-            anomaly_maps = predictions
-            pred_scores = self.compute_image_scores(anomaly_maps)
-        
-        loss = 0.0
-        try:
-            self.model.train()
-            teacher_features, student_features = self.model(inputs['image'])
-            loss = self.loss_fn(teacher_features, student_features).item()
-            self.model.eval()
-        except Exception:
-            pass
-        
-        results = {'loss': loss}
-        
+        # Training mode: (teacher_features, student_features)
+        teacher_features, student_features = predictions
+        loss = self.loss_fn(teacher_features, student_features)
+
+        results = {'loss': loss.item()}
         for metric_name, metric_fn in self.metrics.items():
-            metric_value = metric_fn(pred_scores, inputs['image'])
-            results[metric_name] = float(metric_value)
-        
+            if 'psnr' in metric_name.lower() or 'ssim' in metric_name.lower():
+                # Skip reconstruction metrics for STFPM
+                results[metric_name] = 0.0
+            else:
+                results[metric_name] = 0.0
         return results
-    
+
     @torch.no_grad()
-    def predict_step(self, inputs: Dict[str, Any]) -> torch.Tensor:
-        """
-        Perform prediction step for STFPM.
-        
-        Generates anomaly maps and returns image-level prediction scores.
-        
-        Args:
-            inputs (Dict[str, Any]): Input batch containing 'image'
-            
-        Returns:
-            torch.Tensor: Image-level anomaly prediction scores
-        """
+    def predict_step(self, inputs):
         self.model.eval()
         inputs = self.to_device(inputs)
-        
-        # Generate predictions
+
         predictions = self.model(inputs['image'])
         
-        # Extract prediction scores
+        # Inference mode: InferenceBatch(pred_score, anomaly_map)
         if hasattr(predictions, 'pred_score'):
             return predictions.pred_score
         else:
-            # Fallback - compute scores from anomaly maps
-            return self.compute_image_scores(predictions)
-    
-    def compute_anomaly_scores(self, inputs: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        """
-        Compute both pixel-level and image-level anomaly scores.
-        
-        Args:
-            inputs (Dict[str, Any]): Input batch containing 'image'
-            
-        Returns:
-            Dict[str, torch.Tensor]: Dictionary with 'anomaly_maps' and 'pred_scores'
-        """
+            # Fallback: if training mode output
+            teacher_features, student_features = predictions
+            # Compute simple feature difference as score
+            total_diff = 0
+            for layer in teacher_features:
+                diff = torch.mean((teacher_features[layer] - student_features[layer]) ** 2, dim=[1, 2, 3])
+                total_diff += diff
+            return total_diff
+
+    def compute_anomaly_scores(self, inputs):
         self.model.eval()
         inputs = self.to_device(inputs)
-        
+
         with torch.no_grad():
             predictions = self.model(inputs['image'])
             
             if hasattr(predictions, 'anomaly_map'):
-                # InferenceBatch format
                 return {
                     'anomaly_maps': predictions.anomaly_map,
                     'pred_scores': predictions.pred_score
                 }
             else:
-                # Direct anomaly maps
+                # Fallback: if training mode output
+                teacher_features, student_features = predictions
+                # Compute feature difference as anomaly map
+                batch_size = next(iter(teacher_features.values())).shape[0]
+                image_size = inputs['image'].shape[-2:]
+                
+                anomaly_maps = torch.zeros(batch_size, 1, *image_size, device=self.device)
+                pred_scores = torch.zeros(batch_size, device=self.device)
+                
                 return {
-                    'anomaly_maps': predictions,
-                    'pred_scores': self.compute_image_scores(predictions)
+                    'anomaly_maps': anomaly_maps,
+                    'pred_scores': pred_scores
                 }
-    
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        """
-        Configure optimizer for STFPM training.
-        
-        Uses the exact same optimizer configuration as the original Lightning implementation:
-        - SGD optimizer targeting only student model parameters
-        - Learning rate: 0.4, Momentum: 0.9, Weight decay: 0.001
-        
-        Returns:
-            torch.optim.Optimizer: Configured SGD optimizer
-        """
+
+    def configure_optimizers(self):
         return optim.SGD(
             params=self.model.student_model.parameters(),
             lr=0.4,
@@ -148,131 +110,40 @@ class STFPMModeler(BaseModeler):
             dampening=0.0,
             weight_decay=0.001,
         )
-    
+
     @property
-    def learning_type(self) -> str:
-        """
-        Get the learning type of the model.
-        
-        Returns:
-            str: "one_class" - STFPM uses one-class learning
-        """
+    def learning_type(self):
         return "one_class"
-    
+
     @property
-    def trainer_arguments(self) -> Dict[str, Any]:
-        """
-        Get trainer arguments specific to STFPM.
-        
-        Uses the exact same trainer arguments as the original Lightning implementation.
-        
-        Returns:
-            Dict[str, Any]: Dictionary of trainer arguments:
-                - gradient_clip_val: 0 (disable gradient clipping)
-                - num_sanity_val_steps: 0 (skip validation sanity checks)
-        """
+    def trainer_arguments(self):
         return {
             "gradient_clip_val": 0,
             "num_sanity_val_steps": 0
         }
-    
-    def get_teacher_features(self, inputs: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        """
-        Extract features from teacher network only.
         
-        Args:
-            inputs (Dict[str, Any]): Input batch containing 'image'
-            
-        Returns:
-            Dict[str, torch.Tensor]: Teacher network features
-        """
-        self.model.eval()
-        inputs = self.to_device(inputs)
+    def get_memory_stats(self):
+        """Get memory bank statistics"""
+        if len(self.model.memory_bank) == 0:
+            return {'total_samples': 0}
         
-        with torch.no_grad():
-            return self.model.teacher_model(inputs['image'])
-    
-    def get_student_features(self, inputs: Dict[str, Any]) -> Dict[str, torch.Tensor]:
-        """
-        Extract features from student network only.
+        # 전체 memory bank 통계
+        total_samples = sum(emb.shape[0] for emb in self.model.memory_bank)
         
-        Args:
-            inputs (Dict[str, Any]): Input batch containing 'image'
-            
-        Returns:
-            Dict[str, torch.Tensor]: Student network features
-        """
-        self.model.eval()
-        inputs = self.to_device(inputs)
+        # 최신 배치 통계
+        if self.model.memory_bank:
+            latest = self.model.memory_bank[-1]
+            stats = {
+                'total_samples': total_samples,
+                'latest_batch_size': latest.shape[0],
+                'feature_dim': latest.shape[1],
+                'spatial_size': latest.shape[2:],
+                'latest_mean': latest.mean().item(),
+                'latest_std': latest.std().item(),
+                'latest_min': latest.min().item(),
+                'latest_max': latest.max().item(),
+            }
+        else:
+            stats = {'total_samples': 0}
         
-        with torch.no_grad():
-            return self.model.student_model(inputs['image'])
-
-
-# Factory function for compatibility
-def get_stfpm_modeler(
-    backbone: str = "resnet18",
-    layers: Sequence[str] = ("layer1", "layer2", "layer3"), 
-    metrics: Dict[str, Any] = None,
-    device: str = None
-) -> STFPMModeler:
-    """
-    Factory function to create STFPM modeler.
-    
-    Args:
-        backbone (str): Backbone architecture name
-        layers (Sequence[str]): Feature extraction layers  
-        metrics (Dict[str, Any]): Dictionary of metric functions
-        device (str): Device to run on
-        
-    Returns:
-        STFPMModeler: Configured STFPM modeler instance
-    """
-    return STFPMModeler(
-        backbone=backbone,
-        layers=layers,
-        metrics=metrics,
-        device=device
-    )
-
-
-if __name__ == "__main__":
-    # Test the modeler
-    print("Testing STFPM Modeler...")
-    
-    modeler = STFPMModeler()
-    
-    # Test input
-    inputs = {
-        'image': torch.randn(2, 3, 256, 256),
-        'label': torch.tensor([0, 1])
-    }
-    
-    print(f"Device: {modeler.device}")
-    print(f"Learning type: {modeler.learning_type}")
-    print(f"Trainer arguments: {modeler.trainer_arguments}")
-    
-    # Test optimizer configuration
-    optimizer = modeler.configure_optimizers()
-    print(f"Optimizer: {type(optimizer).__name__}")
-    print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
-    print(f"Momentum: {optimizer.param_groups[0]['momentum']}")
-    
-    # Test training step
-    train_results = modeler.train_step(inputs, optimizer)
-    print(f"Train results: {train_results}")
-    
-    # Test validation step  
-    val_results = modeler.validate_step(inputs)
-    print(f"Validation results: {val_results}")
-    
-    # Test prediction step
-    scores = modeler.predict_step(inputs)
-    print(f"Prediction scores shape: {scores.shape}")
-    
-    # Test anomaly score computation
-    anomaly_results = modeler.compute_anomaly_scores(inputs)
-    print(f"Anomaly maps shape: {anomaly_results['anomaly_maps'].shape}")
-    print(f"Pred scores shape: {anomaly_results['pred_scores'].shape}")
-    
-    print("STFPM Modeler test completed!")
+        return stats

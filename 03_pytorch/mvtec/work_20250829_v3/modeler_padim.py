@@ -13,64 +13,76 @@ class PadimModeler(BaseModeler):
         self.model.train()
         inputs = self.to_device(inputs)
 
-        # PaDiM doesn't require gradient computation during training
         with torch.no_grad():
             predictions = self.model(inputs['image'])
-        
-        # Return dummy loss for compatibility
-        dummy_loss = torch.tensor(0.0, requires_grad=True, device=self.device)
-        
-        results = {'loss': 0.0}
-        # No metrics computed during training for PaDiM
+
+        # Memory bank 진행 상황 모니터링
+        current_batches = len(self.model.memory_bank)
+        total_samples = sum(emb.shape[0] for emb in self.model.memory_bank) if self.model.memory_bank else 0
+
+        # 최신 embedding 통계
+        if self.model.memory_bank:
+            latest_embedding = self.model.memory_bank[-1]
+            embedding_mean = latest_embedding.mean().item()
+            embedding_std = latest_embedding.std().item()
+        else:
+            embedding_mean = 0.0
+            embedding_std = 0.0
+
+        results = {
+            'loss': 0.0,  # dummy loss
+            'memory_batches': current_batches,
+            'total_samples': total_samples,
+            'embedding_mean': embedding_mean,
+            'embedding_std': embedding_std,
+        }
         return results
 
     @torch.no_grad()
     def validate_step(self, inputs):
-        # Ensure model is fitted before validation
         if not self._fitted:
             self.fit()
-            
+
         self.model.eval()
         inputs = self.to_device(inputs)
 
         predictions = self.model(inputs['image'])
-        
-        # PaDiM validation uses inference mode (returns InferenceBatch)
+
         if hasattr(predictions, 'pred_score'):
-            # No loss computation during validation for PaDiM
-            results = {'loss': 0.0}
-            
-            # Compute metrics if available (using anomaly map and original image)
-            if self.metrics:
-                # For image-level metrics, we can use pred_scores
-                pred_scores = predictions.pred_score
-                for metric_name, metric_fn in self.metrics.items():
-                    if 'map' in metric_name.lower():
-                        # For anomaly map metrics
-                        metric_value = metric_fn(predictions.anomaly_map, inputs['image'])
-                    else:
-                        # For score-based metrics, need ground truth scores
-                        # Skip metrics that require ground truth during validation
-                        continue
-                    results[metric_name] = float(metric_value)
-            
+            scores = predictions.pred_score
+            labels = inputs['label']
+
+            # Normal vs Anomaly score 분포
+            normal_mask = labels == 0
+            anomaly_mask = labels == 1
+
+            normal_scores = scores[normal_mask] if normal_mask.any() else torch.tensor([0.0])
+            anomaly_scores = scores[anomaly_mask] if anomaly_mask.any() else torch.tensor([0.0])
+
+            results = {
+                'loss': 0.0,
+                'score_mean': scores.mean().item(),
+                'score_std': scores.std().item(),
+                'normal_mean': normal_scores.mean().item(),
+                'anomaly_mean': anomaly_scores.mean().item(),
+                'separation': (anomaly_scores.mean() - normal_scores.mean()).item() if anomaly_mask.any() and normal_mask.any() else 0.0,
+            }
+
             return results
-        else:
-            # Training mode output - shouldn't happen in validation
-            results = {'loss': 0.0}
-            return results
+
+        return {'loss': 0.0}
 
     @torch.no_grad()
     def predict_step(self, inputs):
         # Ensure model is fitted before prediction
         if not self._fitted:
             self.fit()
-            
+
         self.model.eval()
         inputs = self.to_device(inputs)
 
         predictions = self.model(inputs['image'])
-        
+
         if hasattr(predictions, 'pred_score'):
             return predictions.pred_score
         else:
@@ -84,13 +96,13 @@ class PadimModeler(BaseModeler):
         # Ensure model is fitted before computing scores
         if not self._fitted:
             self.fit()
-            
+
         self.model.eval()
         inputs = self.to_device(inputs)
 
         with torch.no_grad():
             predictions = self.model(inputs['image'])
-            
+
             if hasattr(predictions, 'anomaly_map'):
                 return {
                     'anomaly_maps': predictions.anomaly_map,
@@ -106,13 +118,33 @@ class PadimModeler(BaseModeler):
     def fit(self):
         """Fit Gaussian distribution to collected embeddings."""
         if hasattr(self.model, 'fit'):
+            print(f" > Fitting Gaussian distribution...")
+            print(f" > Memory bank size: {len(self.model.memory_bank)} batches")
+
+            # 총 샘플 수 계산
+            total_samples = sum(emb.shape[0] for emb in self.model.memory_bank)
+            print(f" > Total samples: {total_samples}")
+
+            # Fitting 수행
             self.model.fit()
             self._fitted = True
 
-    def configure_optimizers(self):
-        # PaDiM doesn't require optimization during training
-        # Return a dummy optimizer for compatibility
-        return optim.Adam([torch.tensor(0.0, requires_grad=True)], lr=1e-3)
+            # Fitting 후 Gaussian 파라미터 통계
+            if hasattr(self.model.gaussian, 'mean') and self.model.gaussian.mean is not None:
+                mean_shape = self.model.gaussian.mean.shape
+                inv_cov_shape = self.model.gaussian.inv_covariance.shape
+
+                mean_avg = self.model.gaussian.mean.mean().item()
+                mean_std = self.model.gaussian.mean.std().item()
+
+                print(f" > Gaussian mean shape: {mean_shape}")
+                print(f" > Gaussian inv_cov shape: {inv_cov_shape}")
+                print(f" > Mean statistics - avg: {mean_avg:.4f}, std: {mean_std:.4f}")
+
+        def configure_optimizers(self):
+            # PaDiM doesn't require optimization during training
+            # Return a dummy optimizer for compatibility
+            return optim.Adam([torch.tensor(0.0, requires_grad=True)], lr=1e-3)
 
     @property
     def learning_type(self):

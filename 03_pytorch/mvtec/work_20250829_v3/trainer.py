@@ -46,8 +46,8 @@ def get_logger(output_dir):
 
 def get_optimizer(model, name='adamw', **params):
     available_list = {
-        'adam': optim.Adam, 
-        'sgd': optim.SGD, 
+        'adam': optim.Adam,
+        'sgd': optim.SGD,
         'adamw': optim.AdamW,
     }
     name = name.lower()
@@ -63,17 +63,17 @@ def get_optimizer(model, name='adamw', **params):
 
 def get_scheduler(optimizer, name='plateau', **params):
     available_list = {
-        'step': optim.lr_scheduler.StepLR, 
-        'multi_step': optim.lr_scheduler.MultiStepLR, 
-        'exponential': optim.lr_scheduler.ExponentialLR, 
-        'cosine': optim.lr_scheduler.CosineAnnealingLR, 
-        'plateau': optim.lr_scheduler.ReduceLROnPlateau, 
+        'step': optim.lr_scheduler.StepLR,
+        'multi_step': optim.lr_scheduler.MultiStepLR,
+        'exponential': optim.lr_scheduler.ExponentialLR,
+        'cosine': optim.lr_scheduler.CosineAnnealingLR,
+        'plateau': optim.lr_scheduler.ReduceLROnPlateau,
     }
     name = name.lower()
     if name not in available_list:
         available_names = list(available_list.keys())
         raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
-    
+
     selected = available_list[name]
     default_params = {}
     default_params.update(params)
@@ -89,7 +89,7 @@ def get_stopper(name='early_stop', **params):
     if name not in available_list:
         available_names = list(available_list.keys())
         raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
-    
+
     selected = available_list[name]
     default_params = {}
     default_params.update(params)
@@ -152,10 +152,15 @@ class Trainer:
         for epoch in range(1, num_epochs + 1):
             start_time = time()
             train_results = self.run_epoch(train_loader, epoch, num_epochs, mode='train')
-            train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items()])
+            if 'total_samples' in train_results:
+                train_info = f"collected_samples={train_results['total_samples']}"
+            else:
+                train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items()])
 
             for key, value in train_results.items():
-                history[key].append(value)
+                val_key = f"val_{key}"
+                if val_key in history:
+                    history[key].append(value)
 
             valid_results = {}
             if valid_loader is not None:
@@ -165,11 +170,17 @@ class Trainer:
                     self.modeler.fit()
 
                 valid_results = self.run_epoch(valid_loader, epoch, num_epochs, mode='valid')
-                valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
+
+                if 'separation' in valid_results:
+                    valid_info = f"score_sep={valid_results['separation']:.3f}"
+                else:
+                    valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
 
                 for key, value in valid_results.items():
-                    history[f"val_{key}"].append(value)
-                    
+                    val_key = f"val_{key}"
+                    if val_key in history:  # 키 존재 확인
+                        history[f"val_{key}"].append(value)
+
                 elapsed_time = time() - start_time
                 self.log(f" [{epoch:2d}/{num_epochs}] " f"{train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
             else:
@@ -192,6 +203,12 @@ class Trainer:
     def run_epoch(self, data_loader, epoch, num_epochs, mode):
         total_loss = 0.0
         total_metrics = {name: 0.0 for name in self.metric_names}
+        
+        # PaDiM 전용 누적 변수
+        total_samples = 0
+        separations = []
+        embedding_means = []
+        
         num_batches = 0
 
         desc = f"{mode.capitalize()} [{epoch}/{num_epochs}]"
@@ -203,21 +220,50 @@ class Trainer:
                     batch_results = self.modeler.validate_step(inputs)
 
                 total_loss += batch_results['loss']
+                
+                # PaDiM 전용 지표 수집
+                if 'total_samples' in batch_results:
+                    total_samples = batch_results['total_samples']
+                if 'separation' in batch_results:
+                    separations.append(batch_results['separation'])
+                if 'avg_embedding_mean' in batch_results:
+                    embedding_means.append(batch_results['avg_embedding_mean'])
+                
                 for metric_name in self.modeler.metrics.keys():
                     total_metrics[metric_name] += batch_results[metric_name]
                 num_batches += 1
 
                 avg_loss = total_loss / num_batches
                 avg_metrics = {name: total_metrics[name] / num_batches for name in self.metric_names}
-                pbar.set_postfix({
-                    'loss': f"{avg_loss:.3f}",
-                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}
-                })
+
+                # PaDiM 전용 진행률 표시
+                if 'memory_batches' in batch_results:
+                    pbar.set_postfix({
+                        'batches': batch_results['memory_batches'],
+                        'samples': batch_results['total_samples'],
+                        'emb_mean': f"{batch_results['embedding_mean']:.3f}",
+                        'emb_std': f"{batch_results['embedding_std']:.3f}",
+                    })
+                else:
+                    # 기존 진행률 표시
+                    pbar.set_postfix({
+                        'loss': f"{avg_loss:.3f}",
+                        **{name: f"{value:.3f}" for name, value in avg_metrics.items()}
+                    })
 
         results = {'loss': total_loss / num_batches}
         results.update({name: total_metrics[name] / num_batches for name in self.metric_names})
+        
+        # PaDiM 전용 지표 추가
+        if total_samples > 0:
+            results['total_samples'] = total_samples
+        if separations:
+            results['separation'] = sum(separations) / len(separations)
+        if embedding_means:
+            results['avg_embedding_mean'] = sum(embedding_means) / len(embedding_means)
+        
         return results
-    
+
     @torch.no_grad()
     def predict(self, test_loader):
         """Predict anomaly scores on test dataset"""

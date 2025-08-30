@@ -24,6 +24,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+
+BACKBONE_DIR = os.path.abspath(os.path.join("..", "..", "backbones"))
 BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
     "resnet50": "resnet50-0676ba61.pth", 
@@ -31,13 +33,17 @@ BACKBONE_WEIGHT_FILES = {
     "efficientnet_b0": "efficientnet_b0_ra-3dd342df.pth",
 }
 
+def set_backbone_dir(path):
+    """Set global backbone directory"""
+    global BACKBONE_DIR
+    BACKBONE_DIR = path
 
 def get_local_weight_path(backbone):
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
-        return os.path.join("backbones", filename)
+        return os.path.join(BACKBONE_DIR, filename)  # 전역 변수 사용
     else:
-        return os.path.join("backbones", f"{backbone}.pth")
+        return os.path.join(BACKBONE_DIR, f"{backbone}.pth")
 
 
 def dryrun_find_featuremap_dims(feature_extractor, input_size, layers):
@@ -76,19 +82,25 @@ class TimmFeatureExtractor(nn.Module):
             self.out_dims = [feature_info["num_features"] for layer_name, feature_info in layer_metadata.items()]
 
         elif isinstance(backbone, str):
-            local_weights_path = get_local_weight_path(backbone)
+            # 먼저 idx 계산
             self.idx = self._map_layer_to_idx()
             
+            # 로컬 weight 경로
+            local_weights_path = get_local_weight_path(backbone)
+            
+            # 모델 생성 (항상 pretrained=False)
+            self.feature_extractor = timm.create_model(
+                backbone,
+                pretrained=False,
+                pretrained_cfg=None,
+                features_only=True,
+                exportable=True,
+                out_indices=self.idx,
+            )
+            
+            # 로컬 weight 로딩
             if os.path.exists(local_weights_path):
                 logger.info(f"Loading local weights from {local_weights_path}")
-                self.feature_extractor = timm.create_model(
-                    backbone,
-                    pretrained=False,
-                    pretrained_cfg=None,
-                    features_only=True,
-                    exportable=True,
-                    out_indices=self.idx,
-                )
                 try:
                     state_dict = torch.load(local_weights_path, map_location='cpu')
                     self.feature_extractor.load_state_dict(state_dict, strict=False)
@@ -98,16 +110,7 @@ class TimmFeatureExtractor(nn.Module):
             else:
                 logger.warning(f"Local weights not found at {local_weights_path}")
                 if pre_trained:
-                    logger.warning("Internet connection unavailable. Using random initialization instead of pretrained weights.")
-                
-                self.feature_extractor = timm.create_model(
-                    backbone,
-                    pretrained=False,
-                    pretrained_cfg=None,
-                    features_only=True,
-                    exportable=True,
-                    out_indices=self.idx,
-                )
+                    logger.warning("Using random initialization instead of pretrained weights.")
             
             self.out_dims = self.feature_extractor.feature_info.channels()
 
@@ -118,6 +121,7 @@ class TimmFeatureExtractor(nn.Module):
         self._features = {layer: torch.empty(0) for layer in self.layers}
 
     def _map_layer_to_idx(self):
+        """Map layer names to indices."""
         idx = []
         model = timm.create_model(
             self.backbone,

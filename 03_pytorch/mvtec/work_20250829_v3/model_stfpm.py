@@ -1,83 +1,14 @@
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, NamedTuple
 import torch
 from torch import nn
 from torch.nn import functional as F
+from typing import NamedTuple
 
 from model_base import TimmFeatureExtractor
-
-if TYPE_CHECKING:
-    from anomalib.data.utils.tiler import Tiler
 
 
 class InferenceBatch(NamedTuple):
     pred_score: torch.Tensor
     anomaly_map: torch.Tensor
-
-
-class STFPMModel(nn.Module):
-    def __init__(self, layers, backbone="resnet18"):
-        super().__init__()
-        self.tiler = None
-
-        self.backbone = backbone
-        self.teacher_model = TimmFeatureExtractor(backbone=self.backbone, pre_trained=True, layers=layers).eval()
-        self.student_model = TimmFeatureExtractor(
-            backbone=self.backbone,
-            pre_trained=False,
-            layers=layers,
-            requires_grad=True,
-        )
-
-        for parameters in self.teacher_model.parameters():
-            parameters.requires_grad = False
-
-        self.anomaly_map_generator = AnomalyMapGenerator()
-
-    def forward(self, images):
-        output_size = images.shape[-2:]
-        if self.tiler:
-            images = self.tiler.tile(images)
-        teacher_features = self.teacher_model(images)
-        student_features = self.student_model(images)
-
-        if self.tiler:
-            for layer, data in teacher_features.items():
-                teacher_features[layer] = self.tiler.untile(data)
-            for layer, data in student_features.items():
-                student_features[layer] = self.tiler.untile(data)
-
-        if self.training:
-            return teacher_features, student_features
-
-        anomaly_map = self.anomaly_map_generator(
-            teacher_features=teacher_features,
-            student_features=student_features,
-            image_size=output_size,
-        )
-        pred_score = torch.amax(anomaly_map, dim=(-2, -1))
-        return InferenceBatch(pred_score=pred_score, anomaly_map=anomaly_map)
-
-
-class STFPMLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.mse_loss = nn.MSELoss(reduction="sum")
-
-    def compute_layer_loss(self, teacher_feats, student_feats):
-        height, width = teacher_feats.shape[2:]
-
-        norm_teacher_features = F.normalize(teacher_feats)
-        norm_student_features = F.normalize(student_feats)
-        return (0.5 / (width * height)) * self.mse_loss(norm_teacher_features, norm_student_features)
-
-    def forward(self, teacher_features, student_features):
-        layer_losses = []
-        for layer in teacher_features:
-            loss = self.compute_layer_loss(teacher_features[layer], student_features[layer])
-            layer_losses.append(loss)
-
-        return torch.stack(layer_losses).sum()
 
 
 class AnomalyMapGenerator(nn.Module):
@@ -113,3 +44,69 @@ class AnomalyMapGenerator(nn.Module):
         image_size = kwargs["image_size"]
 
         return self.compute_anomaly_map(teacher_features, student_features, image_size)
+
+
+class STFPMLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse_loss = nn.MSELoss(reduction="sum")
+
+    def compute_layer_loss(self, teacher_feats, student_feats):
+        height, width = teacher_feats.shape[2:]
+
+        norm_teacher_features = F.normalize(teacher_feats)
+        norm_student_features = F.normalize(student_feats)
+        return (0.5 / (width * height)) * self.mse_loss(norm_teacher_features, norm_student_features)
+
+    def forward(self, teacher_features, student_features):
+        layer_losses = []
+        for layer in teacher_features:
+            loss = self.compute_layer_loss(teacher_features[layer], student_features[layer])
+            layer_losses.append(loss)
+
+        return torch.stack(layer_losses).sum()
+
+
+class STFPMModel(nn.Module):
+    def __init__(self, layers, backbone="resnet18"):
+        super().__init__()
+        self.tiler = None
+
+        self.backbone = backbone
+        self.teacher_model = TimmFeatureExtractor(backbone=self.backbone, pre_trained=False, layers=layers).eval()
+        self.student_model = TimmFeatureExtractor(
+            backbone=self.backbone,
+            pre_trained=False,  # 변경
+            layers=layers,
+            requires_grad=True,
+        )
+
+        # teacher model is fixed
+        for parameters in self.teacher_model.parameters():
+            parameters.requires_grad = False
+
+        self.anomaly_map_generator = AnomalyMapGenerator()
+
+    def forward(self, images):
+        output_size = images.shape[-2:]
+        if self.tiler:
+            images = self.tiler.tile(images)
+        teacher_features = self.teacher_model(images)
+        student_features = self.student_model(images)
+
+        if self.tiler:
+            for layer, data in teacher_features.items():
+                teacher_features[layer] = self.tiler.untile(data)
+            for layer, data in student_features.items():
+                student_features[layer] = self.tiler.untile(data)
+
+        if self.training:
+            return teacher_features, student_features
+
+        anomaly_map = self.anomaly_map_generator(
+            teacher_features=teacher_features,
+            student_features=student_features,
+            image_size=output_size,
+        )
+        pred_score = torch.amax(anomaly_map, dim=(-2, -1))
+        return InferenceBatch(pred_score=pred_score, anomaly_map=anomaly_map)

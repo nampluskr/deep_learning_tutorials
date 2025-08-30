@@ -6,8 +6,15 @@ import torch.nn.functional as F
 import os
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score, precision_score, recall_score, f1_score
 from pytorch_msssim import ssim
-import lpips
+# import lpips
 
+
+BACKBONE_DIR = os.path.abspath(os.path.join("..", "..", "backbones"))
+
+def set_backbone_dir(path):
+    """Set global backbone directory for metrics"""
+    global BACKBONE_DIR
+    BACKBONE_DIR = path
 
 # Available metric classes
 AVAILABLE_METRICS = {
@@ -129,26 +136,31 @@ class SSIMMetric(nn.Module):
         return ssim_value.item()
 
 
-class LPIPSMetric(nn.Module):
-    def __init__(self, net='alex', version='0.1'):
-        super().__init__()
-        self.net = net
-        self.version = version
+# class LPIPSMetric(nn.Module):
+#     def __init__(self, net='alex', version='0.1'):
+#         super().__init__()
+#         self.net = net
+#         self.version = version
+        
+#         # LPIPS 내부적으로 여전히 다운로드 시도할 수 있음
+#         # 환경변수로 torch hub 비활성화 필요
+#         import os
+#         os.environ['TORCH_HOME'] = BACKBONE_DIR  # torch hub 경로 변경
+        
+#         # Create LPIPS model without pretrained weights
+#         self.loss_fn = lpips.LPIPS(net=net, version=version, pretrained=False, verbose=False)
+        
+#         # Load local weights directly
+#         local_weights_path = os.path.join(BACKBONE_DIR, f"lpips_{net}.pth")
+#         state_dict = torch.load(local_weights_path, map_location='cpu')
+#         self.loss_fn.load_state_dict(state_dict)
 
-        # Create LPIPS model without pretrained weights
-        self.loss_fn = lpips.LPIPS(net=net, version=version, pretrained=False, verbose=False)
+#     def forward(self, preds, targets):
+#         preds_normalized = preds * 2.0 - 1.0
+#         targets_normalized = targets * 2.0 - 1.0
 
-        # Load local weights directly
-        local_weights_path = os.path.join("backbones", f"lpips_{net}.pth")
-        state_dict = torch.load(local_weights_path, map_location='cpu')
-        self.loss_fn.load_state_dict(state_dict)
-
-    def forward(self, preds, targets):
-        preds_normalized = preds * 2.0 - 1.0
-        targets_normalized = targets * 2.0 - 1.0
-
-        distance = self.loss_fn(preds_normalized, targets_normalized)
-        return distance.mean().item()
+#         distance = self.loss_fn(preds_normalized, targets_normalized)
+#         return distance.mean().item()
 
 
 class OptimalThresholdMetric(nn.Module):
