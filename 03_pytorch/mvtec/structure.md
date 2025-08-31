@@ -3,6 +3,7 @@ anomaly_framework/
 │
 ├─ main.py                     # run_dataset_model
 ├─ config.py                   # Configuration / Hyperparameters (SimpleNamespace)
+├─ utils.py                    # show_xxx_info / show_results
 │
 ├─ datasets/                   # 데이터셋 모듈
 │   ├─ __init__.py
@@ -45,7 +46,9 @@ anomaly_framework/
 │   ├─ metrics_memory.py       # metrics for Memory-based models
 │   ├─ metrics_gradient.py     # metrics for Gradient-based models (PSNRMetric, SSIMMetric)
 │   ├─ metrics_flow.py         # metrics for Flow-based models
-│   └─ metrics_oled.py         # metrics for OLED
+│   ├─ metrics_oled.py         # metrics for OLED
+│   ├─ ssim.py                 # pytorch_msssim 원본 코드 사용
+│   └─ lpips.py                # lpips 원본 코드 사용
 
 └─ experiments/                # 학습 및 평가 결과 저장 (모델 가중치, anomaly map 시각화)
     ├─ experiments_name_01/
@@ -60,3 +63,22 @@ anomaly_framework/
     └─ experiments_name_03/
         └─ ...
 ```
+
+```
+backbones/
+├── resnet18-f37072fd.pth                           # 기존
+├── resnet50-0676ba61.pth                           # 기존
+├── wide_resnet50_2-95faca4d.pth                   # 기존
+├── efficientnet_b0_ra-3dd342df.pth                # 기존
+├── lpips_alex.pth                                 # 기존
+├── lpips_vgg.pth                                  # 기존
+├── lpips_squeeze.pth                              # 기존
+├── cait_M48_448-c8ad5d8d.pth                     # 새로 다운로드
+└── deit_base_distilled_patch16_384-d5dc9272.pth  # 새로 다운로드
+```
+
+파일명: cait_M48_448-c8ad5d8d.pth
+다운로드 URL: https://dl.fbaipublicfiles.com/deit/cait_M48_448-c8ad5d8d.pth
+
+파일명: deit_base_distilled_patch16_384-d5dc9272.pth
+다운로드 URL: https://dl.fbaipublicfiles.com/deit/deit_base_distilled_patch16_384-d5dc9272.pth
