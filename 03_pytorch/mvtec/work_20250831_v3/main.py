@@ -292,6 +292,37 @@ def run_cutpaste(verbose=True):
     show_results(scores, labels)
 
 
+def run_efficientad(verbose=False):
+    from models.model_efficientad import EfficientAdModel, EfficientAdLoss
+    from modelers.modeler_efficientad import EfficientAdModeler
+    from trainers.trainer_gradient import GradientTrainer
+
+    print("\n" + "="*50 + "\nRUNNING EXPERIMENT: EFFICIENTAD\n" + "="*50)
+    categories=["carpet", "leather", "tile"]
+    data = get_data_for_gradient(categories)
+
+    modeler = EfficientAdModeler(
+        model = EfficientAdModel(
+            teacher_out_channels=384,
+            model_size="s",  # or "m" for medium
+            padding=False,
+            pad_maps=True
+        ),
+        loss_fn = EfficientAdLoss(),
+        metrics = {},  # EfficientAd doesn't use standard reconstruction metrics
+    )
+    trainer = GradientTrainer(modeler, scheduler=None, stopper=None, logger=None)
+
+    if verbose:
+        show_data_info(data)
+        show_modeler_info(modeler)
+        show_trainer_info(trainer)
+
+    trainer.fit(data.train_loader(), num_epochs=5, valid_loader=data.valid_loader())
+    scores, labels = trainer.predict(data.test_loader())
+    show_results(scores, labels)
+
+
 def check_backbones(backbone_dir):
     required_files = [
         "resnet18-f37072fd.pth",
@@ -340,7 +371,8 @@ if __name__ == "__main__":
     # run_fastflow()
     # run_patchcore()
     # run_draem()
-    run_cutpaste()
-    
+    # run_cutpaste()
+    run_efficientad()
+
 
 
