@@ -15,20 +15,27 @@ anomaly_framework/
 ├─ models/                     # 모델 정의
 │   ├─ __init__.py
 │   ├─ model_base.py           # 공통 블록 / Feature Extractor / Utility 함수
+│   ├─ flow_components.py      # FastFlow 모델 구현시 필요
+│   ├─ model_draem.py          # DRAEMModel (원본 구조)
+│   ├─ model_efficientad.py    # EfficientAdModel (원본 구조) - 미완성
 │   ├─ model_fastflow.py       # FastFlowModel (원본 구조) + anomaly_map
 │   ├─ model_padim.py          # PaDiMModel (원본 구조) + anomaly_map
 │   ├─ model_patchcore.py      # PatchCoreModel (원본 구조) + anomaly_map
 │   ├─ model_stfpm.py          # STFPMModel (원본 구조) + anomaly_map
+│   ├─ model_cutpaste.py       # CutpasteModel (직접 구현)
 │   ├─ model_autoencoder.py    # AE models (VanillaAE, UNetAE, BackboneAE 등)
 │   └─ model_vae.py            # VAE models (VanillaVAE, UNetVAE, BackboneVAE 등)
 │
 ├─ modelers/                   # 모델 래퍼 (모델 / 손실함수)
 │   ├─ __init__.py
 │   ├─ modeler_base.py         # BaseModeler
+│   ├─ modeler_draem.py        # DRAEMModel (원본 구조)
+│   ├─ modeler_efficientad.py  # EfficientAdModeler (원본 구조) - 미완성
 │   ├─ modeler_fastflow.py     # FastflowModeler
 │   ├─ modeler_padim.py        # PadimModeler
 │   ├─ modeler_patchcore.py    # PatchCoreModeler
 │   ├─ modeler_stfpm.py        # STFPMModeler
+│   ├─ modeler_cutpaste.py     # CutpasteModel (직접 구현)
 │   ├─ modeler_autoencoder.py  # AEModeler
 │   └─ modeler_vae.py          # VAEModeler
 │
@@ -49,7 +56,7 @@ anomaly_framework/
 │   ├─ metrics_oled.py         # metrics for OLED
 │   ├─ ssim.py                 # pytorch_msssim 원본 코드 사용
 │   └─ lpips.py                # lpips 원본 코드 사용
-
+│
 └─ experiments/                # 학습 및 평가 결과 저장 (모델 가중치, anomaly map 시각화)
     ├─ experiments_name_01/
     │   ├─ name_01_weights.pth
@@ -68,14 +75,30 @@ anomaly_framework/
 backbones/
 ├── resnet18-f37072fd.pth                           # 기존
 ├── resnet50-0676ba61.pth                           # 기존
-├── wide_resnet50_2-95faca4d.pth                   # 기존
-├── efficientnet_b0_ra-3dd342df.pth                # 기존
-├── lpips_alex.pth                                 # 기존
-├── lpips_vgg.pth                                  # 기존
-├── lpips_squeeze.pth                              # 기존
-├── cait_M48_448-c8ad5d8d.pth                     # 새로 다운로드
-└── deit_base_distilled_patch16_384-d5dc9272.pth  # 새로 다운로드
+├── wide_resnet50_2-95faca4d.pth                    # 기존
+├── efficientnet_b0_ra-3dd342df.pth                 # 기존
+├── lpips_alex.pth                                  # 기존
+├── lpips_vgg.pth                                   # 기존
+├── lpips_squeeze.pth                               # 기존
+├── cait_M48_448-c8ad5d8d.pth                       # 새로 다운로드
+└── deit_base_distilled_patch16_384-d5dc9272.pth    # 새로 다운로드
 ```
+
+backbones/
+- "resnet18-f37072fd.pth",
+- "resnet34-b627a593.pth",
+- "resnet50-0676ba61.pth",
+- "wide_resnet50_2-95faca4d.pth",
+- "efficientnet_b0_ra-3dd342df.pth",
+- "vgg16-397923af.pth",
+- "alexnet-owt-7be5be79.pth",
+- "squeezenet1_1-b8a52dc0.pth",
+- "lpips_alex.pth",
+- "lpips_vgg.pth",
+- "lpips_squeeze.pth",
+- "cait_M48_448-c8ad5d8d.pth"
+- "deit_base_distilled_patch16_384-d5dc9272.pth"
+
 
 파일명: cait_M48_448-c8ad5d8d.pth
 다운로드 URL: https://dl.fbaipublicfiles.com/deit/cait_M48_448-c8ad5d8d.pth
