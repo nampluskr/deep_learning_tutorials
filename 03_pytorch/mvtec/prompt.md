@@ -33,7 +33,7 @@
   - 라이브러리 업데이트/설치 제한
 
 - 라이브러리 제약
-  - 설치 완료: timm, sklearn
+  - 설치 완료: timm, sklearn, FrEIA 
   - 설치 불가: anomalib, lightning, opencv-python, albumentations, pytorch_msssim, lpips
 
 - 코드 수정 제한

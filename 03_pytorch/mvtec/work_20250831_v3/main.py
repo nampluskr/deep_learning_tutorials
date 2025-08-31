@@ -17,6 +17,10 @@ from trainers.trainer_gradient import GradientTrainer
 from metrics.metrics_gradient import PSNRMetric, SSIMMetric, FeatureSimilarityMetric
 from metrics.metrics_gradient import LPIPSMetric
 
+from models.model_fastflow import FastflowModel, FastflowLoss
+from modelers.modeler_fastflow import FastflowModeler
+from trainers.trainer_flow import FlowTrainer
+
 from models.model_base import set_backbone_dir
 from utils import show_data_info, show_modeler_info, show_trainer_info, show_results
 
@@ -175,6 +179,31 @@ def run_stfpm(verbose=True):
     show_results(scores, labels)
 
 
+def run_fastflow(verbose=True):
+    print("\n" + "="*50 + "\nRUNNING EXPERIMENT: FASTFLOW\n" + "="*50)
+
+    categories=["carpet", "leather", "tile"]
+    data = get_data_for_flow(categories)
+
+    modeler = FastflowModeler(
+        model = FastflowModel(input_size=(256, 256), 
+                              backbone="wide_resnet50_2", ## resnet18 (default)
+                              pre_trained=True, flow_steps=8),
+        loss_fn = FastflowLoss(),
+        metrics = {},
+    )
+    trainer = FlowTrainer(modeler, scheduler=None, stopper=None, logger=None)
+
+    if verbose:
+        show_data_info(data)
+        show_modeler_info(modeler)
+        show_trainer_info(trainer)
+    
+    trainer.fit(data.train_loader(), num_epochs=10, valid_loader=data.valid_loader())
+    scores, labels = trainer.predict(data.test_loader())
+    show_results(scores, labels)
+
+
 def check_backbones(backbone_dir):
     required_files = [
         "resnet18-f37072fd.pth",
@@ -213,7 +242,9 @@ if __name__ == "__main__":
     if backbone_available:
         set_backbone_dir(BACKBONE_DIR)
 
-    verbose = True
-    run_unet_ae(verbose)
-    # run_stfpm(verbose)
-    # run_padim(verbose)
+    # run_unet_ae()/
+    # run_stfpm()
+    # run_padim()
+    run_fastflow()
+    
+    
