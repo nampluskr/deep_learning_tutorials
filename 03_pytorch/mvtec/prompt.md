@@ -33,8 +33,8 @@
   - 라이브러리 업데이트/설치 제한
 
 - 라이브러리 제약
-  - 설치 완료: timm, pytorch_msssim, lpips, sklearn
-  - 설치 불가: anomalib, lightning, opencv-python, albumentations
+  - 설치 완료: timm, sklearn
+  - 설치 불가: anomalib, lightning, opencv-python, albumentations, pytorch_msssim, lpips
 
 - 코드 수정 제한
   - anomalib 모델 / 손실함수 / anomaly_map / metric 코드는 원본 그대로 사용
@@ -173,15 +173,15 @@ backbones/
 - 설치된 라이브러리 (winpython 또는 기본 anaconda 파일 모두 설치되어 있음)
 ```
 timm.py
-pytorch_msssim.py
-lpips
 sklearn
 ```
 
 - 설치하면 절대로 안되는 라이브러리
 ```
-anomalib        # torch_model.py 코드를 수정없이 그대로 사용
+anomalib        # torch_model.py / loss.py / anomaly_map.py 원본 코드 수정없이 그대로 사용
 lightning       # pytorch 로 직접 구현 학습/평가 루프
-opencv-python   # torchvision 으로 사용
-albumentation   # torchvision 으로 사용
+opencv-python   # torchvision 만 사용
+albumentation   # torchvision 만 사용
+pytorch_msssim  # 원본 코드 수정없이 그대로 사용
+lpips           # 원본 코드 수정없이 그대로 사용
 ```
