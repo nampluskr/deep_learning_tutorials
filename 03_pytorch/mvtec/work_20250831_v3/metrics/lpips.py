@@ -32,8 +32,8 @@ BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
     "resnet34": "resnet34-b627a593.pth",
     "resnet50": "resnet50-0676ba61.pth",
-    "resnet101": "resnet101-63fe2227.pth",
-    "resnet152": "resnet152-394f9c45.pth",
+    # "resnet101": "resnet101-63fe2227.pth",
+    # "resnet152": "resnet152-394f9c45.pth",
 }
 
 # LPIPS specific weight files

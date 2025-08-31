@@ -28,9 +28,13 @@ BACKBONE_DIR = os.path.abspath(os.path.join("..", "..", "backbones"))
 
 BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
-    "resnet50": "resnet50-0676ba61.pth", 
+    "resnet34": "resnet34-b627a593.pth",
+    "resnet50": "resnet50-0676ba61.pth",
     "wide_resnet50_2": "wide_resnet50_2-95faca4d.pth",
     "efficientnet_b0": "efficientnet_b0_ra-3dd342df.pth",
+    "vgg16": "vgg16-397923af.pth",
+    "alexnet": "alexnet-owt-7be5be79.pth", 
+    "squeezenet1_1": "squeezenet1_1-b8a52dc0.pth",
 }
 
 
@@ -75,7 +79,7 @@ class TimmFeatureExtractor(nn.Module):
                     "torchvision.models.feature_extraction is required for nn.Module backbones. "
                     "Please update torchvision or use timm backbone strings instead."
                 )
-            
+
             self.feature_extractor = create_feature_extractor(
                 backbone,
                 return_nodes={layer: layer for layer in self.layers},
@@ -86,10 +90,10 @@ class TimmFeatureExtractor(nn.Module):
         elif isinstance(backbone, str):
             # 먼저 idx 계산
             self.idx = self._map_layer_to_idx()
-            
+
             # 로컬 weight 경로
             local_weights_path = get_local_weight_path(backbone)
-            
+
             # 모델 생성 (항상 pretrained=False)
             self.feature_extractor = timm.create_model(
                 backbone,
@@ -99,7 +103,7 @@ class TimmFeatureExtractor(nn.Module):
                 exportable=True,
                 out_indices=self.idx,
             )
-            
+
             # 로컬 weight 로딩
             if os.path.exists(local_weights_path):
                 logger.info(f"Loading local weights from {local_weights_path}")
@@ -113,7 +117,7 @@ class TimmFeatureExtractor(nn.Module):
                 logger.warning(f"Local weights not found at {local_weights_path}")
                 if pre_trained:
                     logger.warning("Using random initialization instead of pretrained weights.")
-            
+
             self.out_dims = self.feature_extractor.feature_info.channels()
 
         else:
@@ -156,7 +160,7 @@ class TimmFeatureExtractor(nn.Module):
 
 def load_backbone_weights(model_name, model):
     weights_path = get_local_weight_path(model_name)
-    
+
     if os.path.exists(weights_path):
         state_dict = torch.load(weights_path, map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
@@ -176,7 +180,7 @@ def get_feature_extractor(backbone="resnet18", layers=["layer1", "layer2", "laye
 
 class DynamicBufferMixin(nn.Module, ABC):
     """Mixin that enables loading state dicts with mismatched tensor shapes."""
-    
+
     def get_tensor_attribute(self, attribute_name: str) -> torch.Tensor:
         """Get a tensor attribute by name."""
         attribute = getattr(self, attribute_name)
@@ -184,7 +188,7 @@ class DynamicBufferMixin(nn.Module, ABC):
             return attribute
         msg = f"Attribute with name '{attribute_name}' is not a torch Tensor"
         raise ValueError(msg)
-        
+
     def _load_from_state_dict(self, state_dict: dict, prefix: str, *args) -> None:
         """Load a state dictionary, resizing buffers if shapes don't match."""
         persistent_buffers = {k: v for k, v in self._buffers.items() if k not in self._non_persistent_buffers_set}
