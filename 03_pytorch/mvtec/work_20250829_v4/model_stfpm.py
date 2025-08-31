@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 from typing import NamedTuple
 
-from .model_base import TimmFeatureExtractor
+from model_base import TimmFeatureExtractor
 
 
 class InferenceBatch(NamedTuple):

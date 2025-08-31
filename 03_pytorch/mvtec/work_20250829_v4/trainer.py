@@ -1,0 +1,323 @@
+import numpy as np
+import random
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from tqdm import tqdm
+import sys
+import logging
+import os
+from time import time
+from copy import deepcopy
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+
+def get_device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def get_logger(output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    log_file = os.path.join(output_dir, 'experiment.log')
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+
+    file_handler = logging.FileHandler(log_file)
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(file_formatter)
+
+    logger.addHandler(file_handler)
+    logger.propagate = False
+    return logger
+
+
+def get_optimizer(model, name='adamw', **params):
+    available_list = {
+        'adam': optim.Adam,
+        'sgd': optim.SGD,
+        'adamw': optim.AdamW,
+    }
+    name = name.lower()
+    if name not in available_list:
+        available_names = list(available_list.keys())
+        raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
+
+    selected = available_list[name]
+    default_params = {'lr': 0.001}
+    default_params.update(params)
+    return selected(model.parameters(), **default_params)
+
+
+def get_scheduler(optimizer, name='plateau', **params):
+    available_list = {
+        'step': optim.lr_scheduler.StepLR,
+        'multi_step': optim.lr_scheduler.MultiStepLR,
+        'exponential': optim.lr_scheduler.ExponentialLR,
+        'cosine': optim.lr_scheduler.CosineAnnealingLR,
+        'plateau': optim.lr_scheduler.ReduceLROnPlateau,
+    }
+    name = name.lower()
+    if name not in available_list:
+        available_names = list(available_list.keys())
+        raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
+
+    selected = available_list[name]
+    default_params = {}
+    default_params.update(params)
+    return selected(optimizer, **default_params)
+
+
+def get_stopper(name='early_stop', **params):
+    available_list = {
+        'early_stop': EarlyStopper,
+        'epoch_stop': EpochStopper,
+    }
+    name = name.lower()
+    if name not in available_list:
+        available_names = list(available_list.keys())
+        raise ValueError(f"Unknown name: {name}. Available names: {available_names}")
+
+    selected = available_list[name]
+    default_params = {}
+    default_params.update(params)
+    return selected(**default_params)
+
+
+class Trainer:
+    def __init__(self, modeler, scheduler=None, stopper=None, logger=None):
+        self.modeler = modeler
+        self.model = modeler.model
+        self.metrics = modeler.metrics
+        self.optimizer = modeler.configure_optimizers()
+        self.scheduler = scheduler
+        self.stopper = stopper
+        self.logger = logger
+        self.metric_names = self.modeler.get_metric_names()
+
+    def log(self, message, level='info'):
+        if self.logger:
+            getattr(self.logger, level, self.logger.info)(message)
+        print(message)
+
+    def update_learning_rate(self, epoch, train_results, valid_results):
+        if self.scheduler is not None:
+            last_lr = self.optimizer.param_groups[0]['lr']
+            if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                metric = valid_results.get('loss', train_results['loss'])
+                self.scheduler.step(metric)
+            else:
+                self.scheduler.step()
+
+            current_lr = self.optimizer.param_groups[0]['lr']
+            if abs(current_lr - last_lr) > 1e-12:
+                self.log(f" > learning rate changed: {last_lr:.3e} => {current_lr:.3e}")
+
+    def check_stopping_condition(self, epoch, train_results, valid_results):
+        if self.stopper is not None:
+            current_loss = valid_results.get('loss', train_results['loss'])
+
+            if hasattr(self.stopper, 'update_metrics'):
+                current_metrics = {**train_results}
+                if valid_results:
+                    current_metrics.update(valid_results)
+                self.stopper.update_metrics(current_metrics)
+
+            should_stop = self.stopper(current_loss, self.modeler.model)
+            if should_stop:
+                self.log(f"Training stopped by stopper at epoch {epoch}")
+                return True
+        return False
+
+    def fit(self, train_loader, num_epochs, valid_loader=None):
+        history = {'loss': []}
+        history.update({name: [] for name in self.metric_names})
+        if valid_loader is not None:
+            history.update({f"val_{name}": [] for name in ['loss'] + list(self.metric_names)})
+
+        self.log("\n > Training started...")
+
+        for epoch in range(1, num_epochs + 1):
+            start_time = time()
+            train_results = self.run_epoch(train_loader, epoch, num_epochs, mode='train')
+            if 'total_samples' in train_results:
+                train_info = f"collected_samples={train_results['total_samples']}"
+            else:
+                train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items()])
+
+            for key, value in train_results.items():
+                val_key = f"val_{key}"
+                if val_key in history:
+                    history[key].append(value)
+
+            valid_results = {}
+            if valid_loader is not None:
+                # Memory-based 모델의 경우 validation 전에 fitting 수행
+                if hasattr(self.modeler, 'fit') and hasattr(self.modeler, '_fitted') and not self.modeler._fitted:
+                    self.log(" > Fitting model parameters...")
+                    self.modeler.fit()
+
+                valid_results = self.run_epoch(valid_loader, epoch, num_epochs, mode='valid')
+
+                if 'separation' in valid_results:
+                    valid_info = f"score_sep={valid_results['separation']:.3f}"
+                else:
+                    valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
+
+                for key, value in valid_results.items():
+                    val_key = f"val_{key}"
+                    if val_key in history:  # 키 존재 확인
+                        history[f"val_{key}"].append(value)
+
+                elapsed_time = time() - start_time
+                self.log(f" [{epoch:2d}/{num_epochs}] " f"{train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
+            else:
+                elapsed_time = time() - start_time
+                self.log(f" [{epoch:2d}/{num_epochs}] " f"{train_info} ({elapsed_time:.1f}s)")
+
+            self.update_learning_rate(epoch, train_results, valid_results)
+
+            if self.check_stopping_condition(epoch, train_results, valid_results):
+                break
+
+        # Final fitting for memory-based models (if not fitted during validation)
+        if hasattr(self.modeler, 'fit') and hasattr(self.modeler, '_fitted') and not self.modeler._fitted:
+            self.log("\n > Fitting model parameters...")
+            self.modeler.fit()
+
+        self.log(" > Training completed!")
+        return history
+
+    def run_epoch(self, data_loader, epoch, num_epochs, mode):
+        total_loss = 0.0
+        total_metrics = {name: 0.0 for name in self.metric_names}
+        
+        # PaDiM 전용 누적 변수
+        total_samples = 0
+        separations = []
+        embedding_means = []
+        
+        num_batches = 0
+
+        desc = f"{mode.capitalize()} [{epoch}/{num_epochs}]"
+        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                if mode == 'train':
+                    batch_results = self.modeler.train_step(inputs, self.optimizer)
+                else:
+                    batch_results = self.modeler.validate_step(inputs)
+
+                total_loss += batch_results['loss']
+                
+                # PaDiM 전용 지표 수집
+                if 'total_samples' in batch_results:
+                    total_samples = batch_results['total_samples']
+                if 'separation' in batch_results:
+                    separations.append(batch_results['separation'])
+                if 'avg_embedding_mean' in batch_results:
+                    embedding_means.append(batch_results['avg_embedding_mean'])
+                
+                for metric_name in self.modeler.metrics.keys():
+                    total_metrics[metric_name] += batch_results[metric_name]
+                num_batches += 1
+
+                avg_loss = total_loss / num_batches
+                avg_metrics = {name: total_metrics[name] / num_batches for name in self.metric_names}
+
+                # PaDiM 전용 진행률 표시
+                if 'memory_batches' in batch_results:
+                    pbar.set_postfix({
+                        'batches': batch_results['memory_batches'],
+                        'samples': batch_results['total_samples'],
+                        'emb_mean': f"{batch_results['embedding_mean']:.3f}",
+                        'emb_std': f"{batch_results['embedding_std']:.3f}",
+                    })
+                else:
+                    # 기존 진행률 표시
+                    pbar.set_postfix({
+                        'loss': f"{avg_loss:.3f}",
+                        **{name: f"{value:.3f}" for name, value in avg_metrics.items()}
+                    })
+
+        results = {'loss': total_loss / num_batches}
+        results.update({name: total_metrics[name] / num_batches for name in self.metric_names})
+        
+        # PaDiM 전용 지표 추가
+        if total_samples > 0:
+            results['total_samples'] = total_samples
+        if separations:
+            results['separation'] = sum(separations) / len(separations)
+        if embedding_means:
+            results['avg_embedding_mean'] = sum(embedding_means) / len(embedding_means)
+        
+        return results
+
+    @torch.no_grad()
+    def predict(self, test_loader):
+        """Predict anomaly scores on test dataset"""
+        self.model.eval()
+        all_scores, all_labels = [], []
+
+        desc = "Predict"
+        with tqdm(test_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                scores = self.modeler.predict_step(inputs)
+                labels = inputs["label"]
+
+                all_scores.append(scores.cpu())
+                all_labels.append(labels.cpu())
+
+        scores_tensor = torch.cat(all_scores, dim=0)
+        labels_tensor = torch.cat(all_labels, dim=0)
+        return scores_tensor, labels_tensor
+
+
+class EarlyStopper:
+    def __init__(self, patience=5, min_delta=1e-4, restore_best_weights=True):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.restore_best_weights = restore_best_weights
+        self.best_loss = float('inf')
+        self.counter = 0
+        self.best_weights = None
+
+    def __call__(self, val_loss, model):
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+            if self.restore_best_weights:
+                self.best_weights = deepcopy(model.state_dict())
+        else:
+            self.counter += 1
+
+        if self.counter >= self.patience:
+            if self.restore_best_weights and self.best_weights is not None:
+                model.load_state_dict(self.best_weights)
+            return True
+        return False
+
+
+class EpochStopper:
+    def __init__(self, max_epoch=10):
+        self.max_epoch = max_epoch
+        self.current_epoch = 0
+
+    def __call__(self, val_loss, model):
+        self.current_epoch += 1
+        return self.current_epoch >= self.max_epoch
+
+
+if __name__ == "__main__":
+    pass

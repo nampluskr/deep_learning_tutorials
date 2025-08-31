@@ -1,7 +1,7 @@
 import torch
 from torch import optim
 
-from .modeler_base import BaseModeler
+from modeler_base import BaseModeler
 
 
 class PadimModeler(BaseModeler):

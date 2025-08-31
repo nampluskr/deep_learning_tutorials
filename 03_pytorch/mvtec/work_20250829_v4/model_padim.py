@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from random import sample
 from typing import NamedTuple
 
-from .model_base import TimmFeatureExtractor, dryrun_find_featuremap_dims, MultiVariateGaussian
+from model_base import TimmFeatureExtractor, dryrun_find_featuremap_dims, MultiVariateGaussian
 
 
 class InferenceBatch(NamedTuple):
