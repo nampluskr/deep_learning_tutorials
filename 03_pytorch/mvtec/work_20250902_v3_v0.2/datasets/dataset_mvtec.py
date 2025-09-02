@@ -1,46 +1,41 @@
 import os
 from glob import glob
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset, random_split
+from torch.utils.data import Dataset
 from torchvision.io import read_image, ImageReadMode
+
+from .dataset_base import BaseDataloader, load_image
 
 
 class MVTecDataset(Dataset):
-    """MVTec AD dataset for anomaly detection"""
 
-    def __init__(self, data_dir, categories, split, transform=None, normal_only=False, **kwargs):
+    def __init__(self, data_dir, categories, transform=None, 
+        load_normal=False, load_anomaly=False, **kwargs):
+
         super().__init__()
         self.transform = transform
-        self.normal_only = normal_only
         self.image_paths = []
         self.labels = []
-
-        # MVTec specific settings
         self.extensions = kwargs.get('extensions', ['*.png'])
-        self.normal_folder = kwargs.get('normal_folder', 'good')
 
         for category in categories:
-            category_path = os.path.join(data_dir, category, split)
+            category_path = os.path.join(data_dir, category)
             if not os.path.exists(category_path):
-                continue
+                return
 
-            if split == "train":
-                # Train: only normal samples
-                normal_path = os.path.join(category_path, self.normal_folder)
-                self._add_files(normal_path, label=0)
-            else:
-                # Test: all subfolders
-                if os.path.exists(category_path):
-                    for subfolder in os.listdir(category_path):
-                        subfolder_path = os.path.join(category_path, subfolder)
-                        if os.path.isdir(subfolder_path):
-                            label = 0 if subfolder == self.normal_folder else 1
-                            if self.normal_only and label == 1:
-                                continue
-                            self._add_files(subfolder_path, label=label)
+            if load_normal:
+                train_normal_path = os.path.join(category_path, "train", "good")
+                test_normal_path = os.path.join(category_path, "test", "good")
+                self._add_files(train_normal_path, label=0)
+                self._add_files(test_normal_path, label=0)
+
+            if load_anomaly:
+                for subfolder in os.listdir(os.path.join(category_path, "test")):
+                    if subfolder != "good":
+                        test_anomaly_path = os.path.join(category_path, "test", subfolder)
+                        self._add_files(test_anomaly_path, label=1)      
 
     def _add_files(self, dir_path, label):
-        """Add files from directory with given label"""
         if not os.path.exists(dir_path):
             return
 
@@ -55,62 +50,23 @@ class MVTecDataset(Dataset):
 
     def __getitem__(self, idx):
         path = self.image_paths[idx]
-        image = read_image(path, mode=ImageReadMode.RGB)
+        image = load_image(path, mode="RGB")
         if self.transform:
             image = self.transform(image)
         label = torch.tensor(self.labels[idx]).long()
         return {"image": image, "label": label}
 
 
-class MVTecDataloader:
-    """Common dataloader factory for all anomaly detection datasets"""
-
+class MVTecDataloader(BaseDataloader):
     def __init__(self, data_dir, categories,
                  train_transform=None, test_transform=None,
                  train_batch_size=32, test_batch_size=16,
-                 valid_ratio=0.2, seed=42, **params):
+                 test_ratio=0.2, valid_ratio=0.0, seed=42, **params):
 
-        self.categories = categories
-        self.data_dir = data_dir
-        self.train_batch_size = train_batch_size
-        self.test_batch_size = test_batch_size
-        self.params = params
+        super().__init__(data_dir, categories,
+                         train_transform=train_transform, test_transform=test_transform,
+                         train_batch_size=train_batch_size, test_batch_size=test_batch_size,
+                         test_ratio=test_ratio, valid_ratio=valid_ratio, seed=seed, **params)
 
-        # Create datasets
-        train_dataset = MVTecDataset(data_dir, categories, 'train', train_transform, **params)
-
-        # Handle validation split
-        if valid_ratio > 0.0:
-            total_size = len(train_dataset)
-            valid_size = int(valid_ratio * total_size)
-            train_size = total_size - valid_size
-
-            torch.manual_seed(seed)
-            train_subset, valid_subset = random_split(
-                range(total_size), [train_size, valid_size],
-                generator=torch.Generator().manual_seed(seed)
-            )
-
-            self.train_dataset = Subset(train_dataset, train_subset.indices)
-
-            valid_dataset = MVTecDataset(data_dir, categories, 'train', test_transform, **params)
-            self.valid_dataset = Subset(valid_dataset, valid_subset.indices)
-        else:
-            self.train_dataset = train_dataset
-            self.valid_dataset = None
-
-        self.test_dataset = MVTecDataset(data_dir, categories, 'test', test_transform, **params)
-
-    def train_loader(self):
-        return DataLoader(self.train_dataset, self.train_batch_size,
-            shuffle=True, drop_last=True, **self.params)
-
-    def valid_loader(self):
-        if self.valid_dataset is None:
-            return None
-        return DataLoader(self.valid_dataset, self.test_batch_size,
-            shuffle=False, drop_last=False, **self.params)
-
-    def test_loader(self):
-        return DataLoader(self.test_dataset, self.test_batch_size,
-            shuffle=False, drop_last=False, **self.params)
+    def get_dataset(self, data_dir, categories, transform, load_normal, load_anomaly, **params):
+        return MVTecDataset(data_dir, categories, transform, load_normal, load_anomaly, **params)
