@@ -57,12 +57,18 @@ class VisADataloader(BaseDataloader):
     def __init__(self, data_dir, categories,
                  train_transform=None, test_transform=None,
                  train_batch_size=32, test_batch_size=16,
-                 test_ratio=0.2, valid_ratio=0.0, seed=42, **params):
+                 test_ratio=0.2, valid_ratio=0.0, seed=42,
+                 train_shuffle=True, test_shuffle=False,
+                 train_drop_last=True, test_drop_last=False,
+                 **params):
 
         super().__init__(data_dir, categories,
                          train_transform=train_transform, test_transform=test_transform,
                          train_batch_size=train_batch_size, test_batch_size=test_batch_size,
-                         test_ratio=test_ratio, valid_ratio=valid_ratio, seed=seed, **params)
+                         test_ratio=test_ratio, valid_ratio=valid_ratio, seed=seed,
+                         train_shuffle=train_shuffle, test_shuffle=test_shuffle,
+                         train_drop_last=train_drop_last, test_drop_last=test_drop_last,
+                         **params)
 
     def get_dataset(self, data_dir, categories, transform, load_normal, load_anomaly, **params):
         return VisADataset(data_dir, categories, transform, load_normal, load_anomaly, **params)

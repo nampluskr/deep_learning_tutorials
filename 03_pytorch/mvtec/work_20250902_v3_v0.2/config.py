@@ -11,32 +11,37 @@ BASE_CONFIGS = SimpleNamespace(
     img_size=256,
     train_batch_size=16,
     test_batch_size=16,
-    num_workers=0,
-    pin_memory=False,
+    num_workers=8,
+    pin_memory=True,
+    train_shuffle=True,
+    test_shuffle=False,
+    train_drop_last=True,
+    test_drop_last=False,
 )
 
 # ===================================================================
 # DATASET CONFIGURATIONS
 # ===================================================================
 
-DATASET_CONFIGS = {
+DATALOADER_CONFIGS = {
     "mvtec": SimpleNamespace(
-        dataset_type="mvtec",
-        dataset_params=dict(),
-        categories=["bottle", "cable", "capsule", "carpet", "grid", 
-                   "hazelnut", "leather", "metal_nut", "pill", "screw", 
-                   "tile", "toothbrush", "transistor", "wood", "zipper"]
+        dataloader_type="mvtec",
+        dataloader_params=dict(),
+        # categories=["bottle", "cable", "capsule", "carpet", "grid",
+        #             "hazelnut", "leather", "metal_nut", "pill", "screw",
+        #             "tile", "toothbrush", "transistor", "wood", "zipper"]
+        categories=["bottle"]
     ),
     "btad": SimpleNamespace(
-        dataset_type="btad",
-        dataset_params=dict(),
+        dataloader_type="btad",
+        dataloader_params=dict(),
         categories=["01", "02", "03"]
     ),
     "visa": SimpleNamespace(
-        dataset_type="visa",
-        dataset_params=dict(),
+        dataloader_type="visa",
+        dataloader_params=dict(),
         categories=["candle", "capsules", "cashew", "chewinggum", "fryum",
-                   "macaroni1", "macaroni2", "pcb1", "pcb2", "pcb3", "pcb4", "pipe_fryum"]
+                    "macaroni1", "macaroni2", "pcb1", "pcb2", "pcb3", "pcb4", "pipe_fryum"]
     ),
 }
 
@@ -79,7 +84,7 @@ MODEL_CONFIGS = {
     ),
     "patchcore": SimpleNamespace(
         model_type="patchcore",
-        model_params=dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"], 
+        model_params=dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"],
                          n_neighbors=9, coreset_sampling_ratio=0.1),
         loss_type="none",
         loss_params=dict(),
@@ -148,50 +153,67 @@ MODEL_CONFIGS = {
 # COMBINATION-SPECIFIC OVERRIDES
 # ===================================================================
 
-COMBINATION_OVERRIDES = {
+COMBINATION_CONFIGS = {
     # PatchCore needs smaller batches for memory efficiency
+    ("patchcore", "mvtec"): SimpleNamespace(
+        train_batch_size=8,
+        test_batch_size=8,
+        train_shuffle=False,
+        train_drop_last=False
+    ),
     ("patchcore", "btad"): SimpleNamespace(
-        train_batch_size=4, 
+        train_batch_size=4,
         test_batch_size=4,
-        model_params=dict(n_neighbors=5)
+        train_shuffle=False,
+        train_drop_last=False
     ),
     ("patchcore", "visa"): SimpleNamespace(
-        train_batch_size=6, 
-        test_batch_size=6
+        train_batch_size=6,
+        test_batch_size=6,
+        train_shuffle=False,
+        train_drop_last=False
     ),
-    ("patchcore", "mvtec"): SimpleNamespace(
-        train_batch_size=8, 
-        test_batch_size=8
+    ("padim", "mvtec"): SimpleNamespace(
+        train_shuffle=False,
+        train_drop_last=False
     ),
-    
+    ("padim", "btad"): SimpleNamespace(
+        train_shuffle=False,
+        train_drop_last=False
+    ),
+    ("padim", "visa"): SimpleNamespace(
+        train_shuffle=False,
+        train_drop_last=False
+    ),
+
     # FastFlow optimization with smaller batches
     ("fastflow", "btad"): SimpleNamespace(
-        train_batch_size=4, 
+        train_batch_size=4,
         test_batch_size=4,
         trainer_params=dict(epochs=300, lr=5e-4)
     ),
     ("fastflow", "visa"): SimpleNamespace(
-        train_batch_size=6, 
+        train_batch_size=6,
         test_batch_size=6
     ),
     ("fastflow", "mvtec"): SimpleNamespace(
-        train_batch_size=8, 
+        train_batch_size=8,
         test_batch_size=8
     ),
-    
+
     # UNet AutoEncoder works well with larger batches on simple datasets
     ("unet_ae", "mvtec"): SimpleNamespace(
-        train_batch_size=32, 
+        train_batch_size=32,
         test_batch_size=32,
         trainer_params=dict(epochs=150, lr=2e-3)
     ),
-    
+
     # STFPM optimizations
     ("stfpm", "mvtec"): SimpleNamespace(
-        train_batch_size=24, 
+        train_batch_size=24,
         test_batch_size=24
     ),
-    
+
     # DRAEM needs specific tuning
     ("draem", "mvtec"): SimpleNamespace(
         trainer_params=dict(epochs=500)
@@ -215,10 +237,11 @@ def merge_configs(destination, source):
             setattr(destination, key, value)
     return destination
 
+
 def build_config(dataset_type, model_type, overrides=None):
     """Build final config: BASE_CONFIGS <- DATASET <- MODEL <- COMBINATION <- overrides"""
-    if dataset_type not in DATASET_CONFIGS:
-        available_datasets = list(DATASET_CONFIGS.keys())
+    if dataset_type not in DATALOADER_CONFIGS:
+        available_datasets = list(DATALOADER_CONFIGS.keys())
         raise ValueError(f"Unknown dataset_type: {dataset_type}. Available: {available_datasets}")
     if model_type not in MODEL_CONFIGS:
         available_models = list(MODEL_CONFIGS.keys())
@@ -226,13 +249,13 @@ def build_config(dataset_type, model_type, overrides=None):
     
     config = SimpleNamespace()
     merge_configs(config, BASE_CONFIGS)
-    merge_configs(config, DATASET_CONFIGS[dataset_type])
+    merge_configs(config, DATALOADER_CONFIGS[dataset_type])
     merge_configs(config, MODEL_CONFIGS[model_type])
     
     # Apply combination-specific overrides
     combination_key = (model_type, dataset_type)
-    if combination_key in COMBINATION_OVERRIDES:
-        merge_configs(config, COMBINATION_OVERRIDES[combination_key])
+    if combination_key in COMBINATION_CONFIGS:
+        merge_configs(config, COMBINATION_CONFIGS[combination_key])
     
     # Normalize dataloader section
     config.dataloader = dict(
@@ -261,73 +284,69 @@ def build_config(dataset_type, model_type, overrides=None):
 # DEBUG UTILITIES
 # ===================================================================
 
-def print_config(config):
-    print(f"\n=== Config: {config.dataset_type} + {config.model_type} ===")
-    print(f"  Batch: train={config.train_batch_size}, test={config.test_batch_size}")
-    print(f"  Image size: {config.img_size}")
-    print(f"  Epochs: {config.trainer_params.get('epochs', 'N/A')}")
-    print(f"  Learning rate: {config.trainer_params.get('lr', 'N/A')}")
-    print(f"  Optimizer: {config.optimizer_type}")
-    print(f"  Scheduler: {config.scheduler_type}")
-    print(f"  Stopper: {config.stopper_type}")
-    print(f"  Model params: {config.model_params}")
-    print(f"  Modeler params: {config.modeler_params}")
+def show_config(config):
+
+    print(f"\n=== Config: {config.dataloader_type} + {config.model_type} ===")
+    for key, value in config.__dict__.items():
+        if key in ("dataloader_type", "model_type", "trainer_type"):
+            print()
+        print(f"  {key}: {value}")
     print("=" * 50)
 
 
 def get_available_types():
     """Get available dataset/model types"""
-    available_datasets = list(DATASET_CONFIGS.keys())
+    available_dataloaders = list(DATALOADER_CONFIGS.keys())
     available_models = list(MODEL_CONFIGS.keys())
-    return available_datasets, available_models
+    return available_dataloaders, available_models
 
 
 def print_all_combinations():
     """Print all possible combinations"""
-    available_datasets, available_models = get_available_types()
-    
+    available_dataloaders, available_models = get_available_types()
+
     print("=" * 60)
     print("ALL POSSIBLE COMBINATIONS")
     print("=" * 60)
-    
+
     total_combinations = 0
-    for dataset_type in available_datasets:
+    for dataloader_type in available_dataloaders:
         for model_type in available_models:
             total_combinations += 1
-            print(f"{total_combinations:2d}. {dataset_type:8s} + {model_type:10s}")
-    
+            print(f"{total_combinations:2d}. {dataloader_type:8s} + {model_type:10s}")
+
     print("=" * 60)
     print(f"Total combinations: {total_combinations}")
-    
+
     # Show combination-specific overrides
-    if COMBINATION_OVERRIDES:
+    if COMBINATION_CONFIGS:
         print("\nCombination-specific overrides:")
-        for (model, dataset), override in COMBINATION_OVERRIDES.items():
+        for (model, dataset), override in COMBINATION_CONFIGS.items():
             print(f"  {dataset:8s} + {model:10s}: {list(override.__dict__.keys())}")
-    
+
     print("=" * 60)
 
 
 def validate_all_configs():
-    available_datasets, available_models = get_available_types()
-    
+    available_dataloaders, available_models = get_available_types()
+
     print("=" * 60)
     print("VALIDATING ALL CONFIGURATIONS")
     print("=" * 60)
-    
+
     valid_count = 0
     invalid_count = 0
-    
-    for dataset_type in available_datasets:
+
+    for dataloader_type in available_dataloaders:
         for model_type in available_models:
             try:
-                config = build_config(dataset_type, model_type)
-                print(f"[OK] {dataset_type:8s} + {model_type:10s}")
+                config = build_config(dataloader_type, model_type)
+                print(f"[OK] {dataloader_type:8s} + {model_type:10s}")
                 valid_count += 1
             except Exception as e:
-                print(f"[FAIL] {dataset_type:8s} + {model_type:10s} -> {e}")
+                print(f"[FAIL] {dataloader_type:8s} + {model_type:10s} -> {e}")
                 invalid_count += 1
-    
+
     print("=" * 60)
     print(f"Valid configurations: {valid_count}")
     print(f"Invalid configurations: {invalid_count}")
@@ -342,7 +361,7 @@ if __name__ == "__main__":
     # Test configuration system
     print_all_combinations()
     validate_all_configs()
-    
+
     # Test specific configurations
-    print_config("mvtec", "unet_ae")
-    print_config("patchcore", "btad")
+    show_config(build_config("mvtec", "unet_ae"))
+    show_config(build_config("btad", "patchcore"))

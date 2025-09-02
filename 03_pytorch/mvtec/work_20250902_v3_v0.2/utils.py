@@ -1,5 +1,14 @@
+import torch
 from metrics.metrics_base import AUROCMetric, AUPRMetric, OptimalThresholdMetric
 from metrics.metrics_base import AccuracyMetric, PrecisionMetric, RecallMetric, F1Metric
+
+
+def get_memory_usage():
+    """Get current memory usage for monitoring."""
+    if torch.cuda.is_available():
+        gpu_memory = torch.cuda.memory_allocated() / 1024**3  # GB
+        return f"GPU: {gpu_memory:.2f}GB"
+    return "CPU mode"
 
 
 def count_labels(dataset):
@@ -23,21 +32,21 @@ def count_labels(dataset):
     return normal_count, anomaly_count
 
 
-def show_data_info(data):
+def show_dataloader_info(dataloader):
     print()
-    print(f" > Dataset Type:      {data.data_dir}")
-    print(f" > Categories:        {data.categories}")
+    print(f" > Dataset Type:      {dataloader.data_dir}")
+    print(f" > Categories:        {dataloader.categories}")
 
-    train = data.train_loader().dataset    
+    train = dataloader.train_loader().dataset    
     normal, anomal = count_labels(train)
     print(f" > Train data:        {len(train)} (normal={normal}, anomaly={anomal})")
 
-    valid = None if data.valid_loader() is None else data.valid_loader().dataset
+    valid = None if dataloader.valid_loader() is None else dataloader.valid_loader().dataset
     if valid is not None:
         normal, anomal = count_labels(valid)
         print(f" > Valid data:        {len(valid)} (normal={normal}, anomaly={anomal})")
 
-    test = data.test_loader().dataset
+    test = dataloader.test_loader().dataset
     normal, anomal = count_labels(test)
     print(f" > Test data:         {len(test)} (normal={normal}, anomaly={anomal})")
 
