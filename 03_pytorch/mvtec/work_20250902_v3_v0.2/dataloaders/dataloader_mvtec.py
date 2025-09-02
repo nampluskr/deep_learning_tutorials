@@ -1,10 +1,11 @@
 import os
 from glob import glob
+from functools import cached_property
 import torch
 from torch.utils.data import Dataset
 from torchvision.io import read_image, ImageReadMode
 
-from .dataset_base import BaseDataloader, load_image
+from .dataloader_base import BaseDataloader, load_image
 
 
 class MVTecDataset(Dataset):
@@ -55,6 +56,14 @@ class MVTecDataset(Dataset):
             image = self.transform(image)
         label = torch.tensor(self.labels[idx]).long()
         return {"image": image, "label": label}
+    
+    @cached_property  
+    def anomaly_count(self):
+        return sum(self.labels)
+    
+    @cached_property
+    def normal_count(self):
+        return len(self.labels) - self.anomaly_count
 
 
 class MVTecDataloader(BaseDataloader):

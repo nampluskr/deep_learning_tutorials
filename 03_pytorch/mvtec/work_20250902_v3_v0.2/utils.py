@@ -2,19 +2,44 @@ from metrics.metrics_base import AUROCMetric, AUPRMetric, OptimalThresholdMetric
 from metrics.metrics_base import AccuracyMetric, PrecisionMetric, RecallMetric, F1Metric
 
 
+def count_labels(dataset):
+    from torch.utils.data import Subset, ConcatDataset
+    
+    def extract_labels(ds):
+        if isinstance(ds, Subset):
+            original_labels = ds.dataset.labels
+            return [original_labels[i] for i in ds.indices]
+        elif isinstance(ds, ConcatDataset):
+            all_labels = []
+            for constituent in ds.datasets:
+                all_labels.extend(extract_labels(constituent))
+            return all_labels
+        else:
+            return ds.labels
+    
+    labels = extract_labels(dataset)
+    anomaly_count = sum(labels)
+    normal_count = len(labels) - anomaly_count
+    return normal_count, anomaly_count
+
+
 def show_data_info(data):
     print()
     print(f" > Dataset Type:      {data.data_dir}")
     print(f" > Categories:        {data.categories}")
-    print(f" > Train data:        {len(data.train_loader().dataset)}")
 
-    valid_loader = data.valid_loader()
-    if valid_loader is not None:
-        print(f" > Valid data:        {len(valid_loader.dataset)}")
-    else:
-        print(f" > Valid data:        None (no validation split)")
+    train = data.train_loader().dataset    
+    normal, anomal = count_labels(train)
+    print(f" > Train data:        {len(train)} (normal={normal}, anomaly={anomal})")
 
-    print(f" > Test data:         {len(data.test_loader().dataset)}")
+    valid = None if data.valid_loader() is None else data.valid_loader().dataset
+    if valid is not None:
+        normal, anomal = count_labels(valid)
+        print(f" > Valid data:        {len(valid)} (normal={normal}, anomaly={anomal})")
+
+    test = data.test_loader().dataset
+    normal, anomal = count_labels(test)
+    print(f" > Test data:         {len(test)} (normal={normal}, anomaly={anomal})")
 
 
 def show_modeler_info(modeler):

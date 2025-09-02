@@ -4,18 +4,19 @@ import torch
 from torch.utils.data import Dataset
 from torchvision.io import read_image, ImageReadMode
 
-from .dataset_base import BaseDataloader, load_image
+from .dataloader_base import BaseDataloader, load_image
 
 
-class BTADDataset(Dataset):
+class VisADataset(Dataset):
 
     def __init__(self, data_dir, categories, transform=None, 
                  load_normal=False, load_anomaly=False, **kwargs):
+
         super().__init__()
         self.transform = transform
         self.image_paths = []
         self.labels = []
-        self.extensions = kwargs.get('extensions', ['*.bmp', '*.jpg', '*.png'])
+        self.extensions = kwargs.get('extensions', ['*.JPG', '*.jpg', '*.png'])
 
         for category in categories:
             category_path = os.path.join(data_dir, category)
@@ -23,14 +24,12 @@ class BTADDataset(Dataset):
                 return
 
             if load_normal:
-                train_normal_path = os.path.join(category_path, "train", "ok")
-                self._add_files(train_normal_path, label=0)
-                test_normal_path = os.path.join(category_path, "test", "ok")
-                self._add_files(test_normal_path, label=0)
+                normal_path = os.path.join(category_path, "Data", "Images", "Normal")
+                self._add_files(normal_path, label=0)
 
             if load_anomaly:
-                test_anomaly_path = os.path.join(category_path, "test", "ko")
-                self._add_files(test_anomaly_path, label=1)
+                anomaly_path = os.path.join(category_path, "Data", "Images", "Anomaly")
+                self._add_files(anomaly_path, label=1)
 
     def _add_files(self, dir_path, label):
         if not os.path.exists(dir_path):
@@ -54,7 +53,7 @@ class BTADDataset(Dataset):
         return {"image": image, "label": label}
 
 
-class BTADDataloader(BaseDataloader):
+class VisADataloader(BaseDataloader):
     def __init__(self, data_dir, categories,
                  train_transform=None, test_transform=None,
                  train_batch_size=32, test_batch_size=16,
@@ -66,4 +65,4 @@ class BTADDataloader(BaseDataloader):
                          test_ratio=test_ratio, valid_ratio=valid_ratio, seed=seed, **params)
 
     def get_dataset(self, data_dir, categories, transform, load_normal, load_anomaly, **params):
-        return BTADDataset(data_dir, categories, transform, load_normal, load_anomaly, **params)
+        return VisADataset(data_dir, categories, transform, load_normal, load_anomaly, **params)
