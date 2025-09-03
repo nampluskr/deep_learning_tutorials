@@ -1,317 +1,227 @@
 import torch
-from tqdm import tqdm
-from time import time
-
 from .trainer_base import BaseTrainer
 
 
 class GradientTrainer(BaseTrainer):
-    """Trainer for gradient-based anomaly detection models (AE, STFPM, DRAEM, DFM)."""
+    """Trainer for gradient-based anomaly detection models (AE, STFPM, DRAEM, VAE, etc.)."""
     
-    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None, **kwargs):
-        super().__init__(modeler, scheduler, stopper, logger)
-        self.optimizer = optimizer
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        """Initialize gradient trainer with modeler and training components."""
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
 
     @property
     def trainer_type(self):
+        """Return trainer type identifier for gradient-based models."""
         return "gradient"
 
     def fit(self, train_loader, num_epochs, valid_loader=None):
-        """Train the model with gradient-based optimization."""
-        history = self._initialize_history()
+        """Gradient-based training with backpropagation."""
+        self.log(f"\n > Gradient Training: {self.modeler.learning_type} learning")
+        self.log(f" > Model: {type(self.modeler.model).__name__}")
+        if hasattr(self.modeler.model, 'teacher_model'):
+            self.log(f" > Teacher-Student Architecture (STFPM)")
         
-        self.log("\n > Training started...")
-
-        for epoch in range(1, num_epochs + 1):
-            start_time = time()
-            
-            # Training epoch
-            train_results = self.train_epoch(train_loader, epoch, num_epochs)
-            
-            # Update training history
-            self._update_history(history, train_results, 'train')
-
-            # Validation epoch (for early stopping)
-            valid_results = {}
-            if valid_loader is not None:
-                valid_results = self.validate_epoch(valid_loader, epoch, num_epochs)
-                self._update_history(history, valid_results, 'valid')
-
-            # Logging
-            elapsed_time = time() - start_time
-            self._log_epoch_results(epoch, num_epochs, train_results, valid_results, elapsed_time)
-
-            # Learning rate scheduling
-            self._update_scheduler(train_results, valid_results)
-
-            # Early stopping check
-            if self._check_stopping_condition(epoch, train_results, valid_results):
-                break
-
-        # Final fitting for memory-based models (compatibility with existing code)
-        if hasattr(self.modeler, 'fit') and hasattr(self.modeler, '_fitted') and not self.modeler._fitted:
-            self.log("\n > Fitting model parameters...")
-            self.modeler.fit()
-
-        self.log(" > Training completed!")
+        # Call parent's fit method which uses training_step and validation_step
+        history = super().fit(train_loader, num_epochs, valid_loader)
+        
         return history
 
-    def train_epoch(self, data_loader, epoch, num_epochs):
-        """Run a single training epoch."""
-        self.modeler.model.train()
+    def fit_with_early_stopping(self, train_loader, max_epochs, valid_loader, patience=10, min_delta=1e-4):
+        """Convenience method for training with early stopping."""
+        from .trainer_base import EarlyStopper
         
-        total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.modeler.get_metric_names()}
-        num_batches = 0
-
-        desc = f"Train [{epoch}/{num_epochs}]"
-        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Forward pass with backpropagation
-                batch_results = self.modeler.train_step(inputs, self.optimizer)
-
-                # Accumulate results
-                total_loss += batch_results['loss']
-                for metric_name in total_metrics.keys():
-                    if metric_name in batch_results:
-                        total_metrics[metric_name] += batch_results[metric_name]
-                
-                num_batches += 1
-
-                # Update progress bar
-                avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches for name in total_metrics.keys()}
-                
-                progress_info = {'loss': f"{avg_loss:.3f}"}
-                for name, value in avg_metrics.items():
-                    if value != 0.0:
-                        progress_info[name] = f"{value:.3f}"
-                
-                pbar.set_postfix(progress_info)
-
-        # Prepare epoch results
-        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches for name in total_metrics.keys()})
+        original_stopper = self.stopper
+        self.stopper = EarlyStopper(patience=patience, min_delta=min_delta, restore_best_weights=True)
         
-        return results
+        try:
+            history = self.fit(train_loader, max_epochs, valid_loader)
+        finally:
+            self.stopper = original_stopper
+            
+        return history
 
-    def validate_epoch(self, data_loader, epoch, num_epochs):
-        """Run a single validation epoch (for early stopping)."""
-        self.modeler.model.eval()
+    def fit_with_lr_scheduling(self, train_loader, num_epochs, valid_loader=None, 
+                              scheduler_type='plateau', **scheduler_params):
+        """Convenience method for training with learning rate scheduling."""
+        import torch.optim.lr_scheduler as lr_scheduler
         
-        total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.modeler.get_metric_names()}
-        num_batches = 0
-
-        desc = f"Valid [{epoch}/{num_epochs}]"
-        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Forward pass without backpropagation
-                batch_results = self.modeler.validate_step(inputs)
-
-                # Accumulate results
-                total_loss += batch_results['loss']
-                for metric_name in total_metrics.keys():
-                    if metric_name in batch_results:
-                        total_metrics[metric_name] += batch_results[metric_name]
-                
-                num_batches += 1
-
-                # Update progress bar
-                avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches for name in total_metrics.keys()}
-                
-                progress_info = {'loss': f"{avg_loss:.3f}"}
-                for name, value in avg_metrics.items():
-                    if value != 0.0:
-                        progress_info[name] = f"{value:.3f}"
-                
-                pbar.set_postfix(progress_info)
-
-        # Prepare epoch results
-        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches for name in total_metrics.keys()})
-        
-        return results
-
-    def evaluate_epoch(self, data_loader, desc="Evaluate"):
-        """Run a single evaluation epoch (for anomaly detection evaluation)."""
-        self.modeler.model.eval()
-        
-        all_scores = []
-        all_labels = []
-        score_stats = []
-        num_batches = 0
-
-        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Evaluation step - generates anomaly maps and scores
-                batch_results = self.modeler.evaluate_step(inputs)
-                
-                # Collect scores and labels
-                if 'pred_scores' in batch_results:
-                    all_scores.append(batch_results['pred_scores'].cpu())
-                    all_labels.append(inputs['label'].cpu())
-                    
-                    # Collect statistics
-                    if 'score_mean' in batch_results:
-                        score_stats.append({
-                            'score_mean': batch_results['score_mean'],
-                            'score_std': batch_results['score_std'],
-                            'separation': batch_results.get('separation', 0.0)
-                        })
-                
-                num_batches += 1
-
-                # Update progress bar
-                if score_stats:
-                    avg_separation = sum(s['separation'] for s in score_stats) / len(score_stats)
-                    pbar.set_postfix({'separation': f"{avg_separation:.3f}"})
-
-        # Prepare evaluation results
-        results = {
-            'scores': torch.cat(all_scores, dim=0) if all_scores else torch.tensor([]),
-            'labels': torch.cat(all_labels, dim=0) if all_labels else torch.tensor([]),
+        # Create scheduler
+        scheduler_map = {
+            'plateau': lr_scheduler.ReduceLROnPlateau,
+            'step': lr_scheduler.StepLR,
+            'cosine': lr_scheduler.CosineAnnealingLR,
+            'exponential': lr_scheduler.ExponentialLR,
         }
         
-        # Add aggregated statistics
-        if score_stats:
-            results.update({
-                'score_mean': sum(s['score_mean'] for s in score_stats) / len(score_stats),
-                'score_std': sum(s['score_std'] for s in score_stats) / len(score_stats),
-                'separation': sum(s['separation'] for s in score_stats) / len(score_stats),
-            })
+        if scheduler_type not in scheduler_map:
+            raise ValueError(f"Unknown scheduler: {scheduler_type}")
         
-        return results
-
-    def predict_epoch(self, data_loader, desc="Predict"):
-        """Run a single prediction epoch (returns only scores)."""
-        self.modeler.model.eval()
+        original_scheduler = self.scheduler
         
-        all_scores = []
-        all_labels = []
-
-        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Prediction step - returns only scores
-                scores = self.modeler.predict_step(inputs)
-                labels = inputs["label"]
-
-                all_scores.append(scores.cpu())
-                all_labels.append(labels.cpu())
-
-        return torch.cat(all_scores, dim=0), torch.cat(all_labels, dim=0)
-
-    def evaluate(self, test_loader):
-        """Run complete evaluation on test set."""
-        self.log(" > Evaluation started...")
-        start_time = time()
-        
-        results = self.evaluate_epoch(test_loader, desc="Evaluate")
-        
-        elapsed_time = time() - start_time
-        if 'separation' in results:
-            self.log(f" > Evaluation completed: separation={results['separation']:.3f} ({elapsed_time:.1f}s)")
+        # Set default parameters
+        if scheduler_type == 'plateau':
+            params = {'patience': 5, 'factor': 0.5, 'verbose': True}
+        elif scheduler_type == 'step':
+            params = {'step_size': 30, 'gamma': 0.1}
+        elif scheduler_type == 'cosine':
+            params = {'T_max': num_epochs}
+        elif scheduler_type == 'exponential':
+            params = {'gamma': 0.9}
         else:
-            self.log(f" > Evaluation completed ({elapsed_time:.1f}s)")
+            params = {}
         
-        return results
-
-    @torch.no_grad()
-    def predict(self, test_loader):
-        """Run prediction on test set."""
-        self.log(" > Prediction started...")
-        start_time = time()
+        params.update(scheduler_params)
+        self.scheduler = scheduler_map[scheduler_type](self.optimizer, **params)
         
-        scores, labels = self.predict_epoch(test_loader, desc="Predict")
-        
-        elapsed_time = time() - start_time
-        self.log(f" > Prediction completed: {len(scores)} samples ({elapsed_time:.1f}s)")
-        
-        return scores, labels
-
-    def _initialize_history(self):
-        """Initialize training history dictionary."""
-        history = {'loss': []}
-        history.update({name: [] for name in self.modeler.get_metric_names()})
+        try:
+            history = self.fit(train_loader, num_epochs, valid_loader)
+        finally:
+            self.scheduler = original_scheduler
+            
         return history
 
-    def _update_history(self, history, results, prefix=''):
-        """Update training history with epoch results."""
-        key_prefix = f"{prefix}_" if prefix else ""
+    def get_model_stats(self):
+        """Get general statistics about the model."""
+        stats = {}
         
-        for key, value in results.items():
-            if key in ['scores', 'labels']:  # Skip evaluation-specific keys
-                continue
-                
-            history_key = f"{key_prefix}{key}"
-            if history_key not in history:
-                history[history_key] = []
-            history[history_key].append(value)
-
-    def _log_epoch_results(self, epoch, num_epochs, train_results, valid_results, elapsed_time):
-        """Log epoch results in consistent format."""
-        # Format training results
-        train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items() 
-                               if key not in ['scores', 'labels']])
-
-        if valid_results:
-            # Format validation results  
-            if 'separation' in valid_results:
-                valid_info = f"separation={valid_results['separation']:.3f}"
-            else:
-                valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items() 
-                                      if key not in ['scores', 'labels']])
-            
-            self.log(f" [{epoch:2d}/{num_epochs}] {train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
-        else:
-            self.log(f" [{epoch:2d}/{num_epochs}] {train_info} ({elapsed_time:.1f}s)")
-
-    def _update_scheduler(self, train_results, valid_results):
-        """Update learning rate scheduler."""
-        if self.scheduler is not None:
-            last_lr = self.optimizer.param_groups[0]['lr']
-            
-            if hasattr(self.scheduler, 'step'):
-                # For ReduceLROnPlateau, use validation loss if available
-                if 'ReduceLROnPlateau' in str(type(self.scheduler)):
-                    metric = valid_results.get('loss', train_results['loss'])
-                    self.scheduler.step(metric)
-                else:
-                    self.scheduler.step()
-
-                current_lr = self.optimizer.param_groups[0]['lr']
-                if abs(current_lr - last_lr) > 1e-12:
-                    self.log(f" > Learning rate changed: {last_lr:.3e} => {current_lr:.3e}")
-
-    def _check_stopping_condition(self, epoch, train_results, valid_results):
-        """Check if training should stop early."""
-        if self.stopper is not None:
-            current_loss = valid_results.get('loss', train_results['loss'])
-            
-            should_stop = self.stopper(current_loss, self.modeler.model)
-            if should_stop:
-                self.log(f" > Training stopped by stopper at epoch {epoch}")
-                return True
-        return False
-
-    def log(self, message, level='info'):
-        """Log message using logger or print."""
-        if self.logger:
-            getattr(self.logger, level, self.logger.info)(message)
-        else:
-            print(message)
-
-    def get_memory_stats(self):
-        """Get memory bank statistics if available (for compatibility)."""
-        if hasattr(self.modeler, 'get_memory_stats'):
-            return self.modeler.get_memory_stats()
-        elif hasattr(self.modeler.model, 'memory_bank'):
-            if hasattr(self.modeler.model.memory_bank, '__len__') and len(self.modeler.model.memory_bank) == 0:
-                return {'total_samples': 0}
-            
-            if hasattr(self.modeler.model, 'memory_bank'):
-                total_samples = sum(emb.shape[0] for emb in self.modeler.model.memory_bank if hasattr(emb, 'shape'))
-                return {'total_samples': total_samples}
+        # Basic model statistics
+        total_params = sum(p.numel() for p in self.modeler.model.parameters())
+        trainable_params = sum(p.numel() for p in self.modeler.model.parameters() if p.requires_grad)
         
-        return {'total_samples': 0}
+        stats.update({
+            'model_name': type(self.modeler.model).__name__,
+            'modeler_name': type(self.modeler).__name__,
+            'total_params': total_params,
+            'trainable_params': trainable_params,
+            'learning_type': self.modeler.learning_type,
+            'device': str(self.modeler.device),
+        })
+        
+        # Loss function info
+        if self.modeler.loss_fn:
+            stats['loss_function'] = type(self.modeler.loss_fn).__name__
+        
+        # Metrics info
+        stats['metrics'] = list(self.modeler.metrics.keys())
+        
+        # Model-specific stats for STFPM
+        if hasattr(self.modeler.model, 'teacher_model') and hasattr(self.modeler.model, 'student_model'):
+            teacher_params = sum(p.numel() for p in self.modeler.model.teacher_model.parameters())
+            teacher_trainable = sum(p.numel() for p in self.modeler.model.teacher_model.parameters() if p.requires_grad)
+            student_params = sum(p.numel() for p in self.modeler.model.student_model.parameters())
+            student_trainable = sum(p.numel() for p in self.modeler.model.student_model.parameters() if p.requires_grad)
+            
+            stats.update({
+                'architecture_type': 'teacher_student',
+                'teacher_total_params': teacher_params,
+                'teacher_trainable_params': teacher_trainable,
+                'student_total_params': student_params,
+                'student_trainable_params': student_trainable,
+                'backbone_architecture': getattr(self.modeler.model, 'backbone', 'unknown'),
+            })
+        else:
+            stats['architecture_type'] = 'single_model'
+        
+        return stats
+
+    def validate_gradient_setup(self):
+        """Validate that gradient-based model is set up correctly."""
+        issues = []
+        
+        # Check that model has trainable parameters
+        trainable_params = sum(p.numel() for p in self.modeler.model.parameters() if p.requires_grad)
+        if trainable_params == 0:
+            issues.append("No trainable parameters in model")
+        
+        # Check that optimizer has parameters
+        if self.optimizer is None:
+            issues.append("No optimizer configured")
+        elif hasattr(self.optimizer, 'param_groups'):
+            optimizer_params = sum(len(group['params']) for group in self.optimizer.param_groups)
+            if optimizer_params == 0:
+                issues.append("Optimizer has no parameters")
+            
+        # Check loss function
+        if self.modeler.loss_fn is None:
+            issues.append("No loss function defined")
+            
+        # Model-specific validation for teacher-student models (STFPM)
+        if hasattr(self.modeler.model, 'teacher_model') and hasattr(self.modeler.model, 'student_model'):
+            teacher_trainable = any(p.requires_grad for p in self.modeler.model.teacher_model.parameters())
+            student_trainable = any(p.requires_grad for p in self.modeler.model.student_model.parameters())
+            
+            if teacher_trainable:
+                issues.append("Teacher model parameters are trainable (should be frozen for STFPM)")
+            if not student_trainable:
+                issues.append("Student model parameters are frozen (should be trainable for STFPM)")
+            
+            # Check optimizer targets student only
+            if self.optimizer and hasattr(self.optimizer, 'param_groups'):
+                optimizer_param_ids = {id(p) for group in self.optimizer.param_groups for p in group['params']}
+                student_param_ids = {id(p) for p in self.modeler.model.student_model.parameters() if p.requires_grad}
+                if optimizer_param_ids != student_param_ids:
+                    issues.append("Optimizer is not targeting student model parameters exclusively")
+        
+        if issues:
+            self.log("Gradient Model Setup Issues:")
+            for issue in issues:
+                self.log(f" - {issue}")
+            return False
+        else:
+            self.log(" > Gradient model setup validated successfully")
+            return True
+
+    def analyze_training_progress(self, history):
+        """Analyze gradient-based training progress from history."""
+        analysis = {}
+        
+        if 'loss' in history and len(history['loss']) > 0:
+            losses = history['loss']
+            analysis['loss_trend'] = {
+                'initial_loss': losses[0],
+                'final_loss': losses[-1],
+                'loss_reduction': losses[0] - losses[-1],
+                'loss_reduction_ratio': (losses[0] - losses[-1]) / losses[0] if losses[0] > 0 else 0.0,
+                'min_loss': min(losses),
+                'converged': abs(losses[-1] - losses[-2]) < 1e-6 if len(losses) > 1 else False,
+            }
+        
+        # Analyze validation loss if available
+        if 'val_loss' in history and len(history['val_loss']) > 0:
+            val_losses = history['val_loss']
+            analysis['val_loss_trend'] = {
+                'initial_val_loss': val_losses[0],
+                'final_val_loss': val_losses[-1],
+                'min_val_loss': min(val_losses),
+                'best_val_epoch': val_losses.index(min(val_losses)) + 1,
+                'overfitting': val_losses[-1] > min(val_losses) * 1.1,  # Simple overfitting detection
+            }
+        
+        # Analyze metrics trends
+        for metric_name in self.modeler.get_metric_names():
+            if metric_name in history and len(history[metric_name]) > 0:
+                values = history[metric_name]
+                analysis[f'{metric_name}_trend'] = {
+                    'initial': values[0],
+                    'final': values[-1],
+                    'best': max(values) if values else 0,
+                    'improved': values[-1] > values[0] if values else False,
+                }
+            
+            # Also check validation metrics
+            val_metric_key = f'val_{metric_name}'
+            if val_metric_key in history and len(history[val_metric_key]) > 0:
+                val_values = history[val_metric_key]
+                analysis[f'{val_metric_key}_trend'] = {
+                    'initial': val_values[0],
+                    'final': val_values[-1],
+                    'best': max(val_values) if val_values else 0,
+                    'best_epoch': val_values.index(max(val_values)) + 1 if val_values else 0,
+                    'improved': val_values[-1] > val_values[0] if val_values else False,
+                }
+        
+        return analysis
+
+
+if __name__ == "__main__":
+    pass

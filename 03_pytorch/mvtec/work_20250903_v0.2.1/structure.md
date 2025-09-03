@@ -19,7 +19,7 @@ anomaly_framework/
 │   ├─ __init__.py
 │   ├─ model_base.py             # 공통 블록 / Feature Extractor / Utility 함수
 │   ├─ flow_components.py        # FastFlow 모델 구현시 필요
-│   ├─ model_draem.py            # DRAEMModel (원본 구조) + 
+│   ├─ model_draem.py            # DRAEMModel (원본 구조) +
 │   ├─ model_fastflow.py         # FastFlowModel (원본 구조) + anomaly_map
 │   ├─ model_padim.py            # PaDiMModel (원본 구조) + anomaly_map
 │   ├─ model_patchcore.py        # PatchCoreModel (원본 구조) + anomaly_map
@@ -56,4 +56,63 @@ anomaly_framework/
 │   └─ lpips.py                  # lpips 원본 코드 사용
 │
 └─ experiments/                # 학습 및 평가 결과 저장 (모델 가중치, anomaly map 시각화)
+```
+
+- Modeler 코드 스타일은 lighting 스타일을 참고하여 작성한 것인데, 중요한 차이점이 있습니다.
+- validation step은 training step과 동일한 연산을 하되 backpropagation만 생략한 것 입니다.
+
+#### BaseModeler 구조 - 핵심 메서드 시그너처
+```pythons
+class BaseModeler(ABC):
+    def __init__(self, model, loss_fn=None, metrics=None, device=None):
+        """Initialize modeler with model, loss function, and metrics."""
+        
+    @abstractmethod  
+    def forward(self, inputs):
+        """Core forward pass - model specific implementation."""
+        # Returns: model-specific outputs (features, reconstructions, etc.)
+        
+    def training_step(self, inputs, optimizer):
+        """Training step with backpropagation."""
+        # Uses: self.forward() + loss computation + backprop
+        # Returns: {'loss': float, 'train_metrics': dict}
+        
+    def validation_step(self, inputs):
+        # training step과 동일한 연산을 하되 backpropagation만 생략
+        """Validation step for early stopping (no backprop).""" 
+        # Uses: self.forward() + loss + basic metrics (AUROC, etc.)
+        # Returns: {'val_loss': float, 'val_auroc': float, 'val_metrics': dict}
+        
+    def compute_anomaly_maps(self, inputs):
+        """Compute pixel-level anomaly heatmaps.""" 
+        # Uses: self.forward() + model-specific anomaly map generation
+        # Returns: torch.Tensor [B, 1, H, W] - pixel-level anomaly intensity
+        
+    def compute_anomaly_scores(self, inputs):
+        """Compute image-level anomaly scores."""
+        # Uses: self.compute_anomaly_maps() or direct scoring
+        # Returns: torch.Tensor [B] - image-level anomaly scores
+```
+
+#### BaseTrainer 구조 - 핵심 메서드 시그너처
+```pythons
+class BaseTrainer(ABC):
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        """Initialize trainer with modeler and training components."""
+        
+    def fit(self, train_loader, num_epochs, valid_loader=None):
+        """Main training loop using training_step + validation_step."""
+        # Returns: training history dict
+        
+    def test(self, test_loader):
+        """Comprehensive evaluation using compute_anomaly_maps/scores."""
+        # Returns: {'anomaly_maps': Tensor, 'anomaly_scores': Tensor, 'labels': Tensor, 'metrics': dict}
+        
+    def predict(self, test_loader):
+        """Simple prediction returning scores and labels for evaluation."""
+        # Returns: (scores_tensor, labels_tensor) - for utils.show_results()
+        
+    def run_epoch(self, data_loader, epoch, num_epochs, mode):
+        """Internal method for running single epoch."""
+        # mode: 'train' uses training_step(), 'valid' uses validation_step()
 ```
