@@ -61,6 +61,23 @@ anomaly_framework/
 - Modeler 코드 스타일은 lighting 스타일을 참고하여 작성한 것인데, 중요한 차이점이 있습니다.
 - validation step은 training step과 동일한 연산을 하되 backpropagation만 생략한 것 입니다.
 
+#### Lightning 표준 패턴 적용
+training_step(batch, optimizer)     # 역전파 포함
+validation_step(batch)              # 역전파 없음 - 학습 중 검증 (training mode 유지)
+test_step(batch)                    # 완전한 추론 모드 - 종합 평가 (inference mode)
+predict_step(batch)                 # 단순 예측
+
+### 이상감지 표준 용어
+anomaly_maps - 픽셀 레벨 이상 맵
+anomaly_scores - 이미지 레벨 이상 점수
+normal_mask / anomaly_mask - 정상/이상 마스크
+separation - 정상/이상 점수 분리도
+
+### 메트릭 계산 분리
+- def compute_train_metrics(self, outputs, batch):      # 학습용 (PSNR, SSIM)
+- def compute_valid_metrics(self, outputs, batch):      # 검증용 (조기 종료)
+- def compute_test_metrics(self, scores, maps, batch):  # 평가용 (AUROC, AUPR)
+
 #### BaseModeler 구조 - 핵심 메서드 시그너처
 ```pythons
 class BaseModeler(ABC):
@@ -69,19 +86,32 @@ class BaseModeler(ABC):
         
     @abstractmethod  
     def forward(self, inputs):
+        # 모델별 순전파
         """Core forward pass - model specific implementation."""
         # Returns: model-specific outputs (features, reconstructions, etc.)
+
+    def compute_loss(self, outputs, batch):  # 모델별 손실 계산
         
     def training_step(self, inputs, optimizer):
         """Training step with backpropagation."""
         # Uses: self.forward() + loss computation + backprop
         # Returns: {'loss': float, 'train_metrics': dict}
-        
-    def validation_step(self, inputs):
-        # training step과 동일한 연산을 하되 backpropagation만 생략
+
+    @torch.no_grad()
+    def validate_step(self, inputs):
+        # training step과 동일한 연산을 하되 backpropagation만 생략 (학습중 검증 - 과적합 방지 early-stopping)
+        """Validation step during training (no backpropagation, but still in training context)"""
         """Validation step for early stopping (no backprop).""" 
         # Uses: self.forward() + loss + basic metrics (AUROC, etc.)
         # Returns: {'val_loss': float, 'val_auroc': float, 'val_metrics': dict}
+        """Validation step during training (no backpropagation, but still in training context)"""
+        self.model.train()  # Keep in training mode for teacher-student feature extraction
+
+
+    @torch.no_grad()
+    def evaluate_step(self, inputs):
+        """Evaluation step for inference (complete evaluation mode)"""
+        self.model.eval()
         
     def compute_anomaly_maps(self, inputs):
         """Compute pixel-level anomaly heatmaps.""" 
@@ -104,11 +134,13 @@ class BaseTrainer(ABC):
         """Main training loop using training_step + validation_step."""
         # Returns: training history dict
         
-    def test(self, test_loader):
+    def evaluate(self, test_loader):    
+        # 전체 테스트셋 종합 평가
         """Comprehensive evaluation using compute_anomaly_maps/scores."""
         # Returns: {'anomaly_maps': Tensor, 'anomaly_scores': Tensor, 'labels': Tensor, 'metrics': dict}
         
-    def predict(self, test_loader):
+    def predict(self, test_loader): 
+        # 단순 점수 반환 (utils.show_results용)
         """Simple prediction returning scores and labels for evaluation."""
         # Returns: (scores_tensor, labels_tensor) - for utils.show_results()
         
