@@ -5,7 +5,7 @@ from .modeler_base import BaseModeler
 
 
 class DraemModeler(BaseModeler):
-    def __init__(self, model, loss_fn, metrics=None, device=None, enable_sspcab=False, sspcab_lambda=0.1):
+    def __init__(self, model, loss_fn=None, metrics=None, device=None, enable_sspcab=False, sspcab_lambda=0.1):
         super().__init__(model, loss_fn, metrics, device)
         
         # SSPCAB support

@@ -8,8 +8,8 @@ from .trainer_base import BaseTrainer
 class MemoryTrainer(BaseTrainer):
     """Trainer for memory-based anomaly detection models (PaDiM, PatchCore, SPADE)"""
     
-    def __init__(self, modeler, scheduler=None, stopper=None, logger=None):
-        super().__init__(modeler, scheduler, stopper, logger)
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
         self._fitted = getattr(modeler, '_fitted', False)
 
     @property

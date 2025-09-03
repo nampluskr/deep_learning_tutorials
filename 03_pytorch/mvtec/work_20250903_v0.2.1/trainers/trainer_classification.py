@@ -8,8 +8,8 @@ from .trainer_base import BaseTrainer
 class ClassificationTrainer(BaseTrainer):
     """Trainer for classification-based anomaly detection models (CutPaste, GeomAD, etc.)"""
     
-    def __init__(self, modeler, scheduler=None, stopper=None, logger=None):
-        super().__init__(modeler, scheduler, stopper, logger)
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
 
     @property
     def trainer_type(self):

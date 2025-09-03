@@ -9,7 +9,7 @@ from .modeler_base import BaseModeler
 class FastflowModeler(BaseModeler):
     """FastFlow Modeler for normalizing flow-based anomaly detection."""
 
-    def __init__(self, model, loss_fn, metrics=None, device=None):
+    def __init__(self, model, loss_fn=None, metrics=None, device=None):
         super().__init__(model, loss_fn, metrics, device)
 
     def train_step(self, inputs, optimizer):

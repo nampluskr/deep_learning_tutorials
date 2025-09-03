@@ -1,30 +1,53 @@
 import torch
-from torch import optim
-
 from .modeler_base import BaseModeler
 
 
 class STFPMModeler(BaseModeler):
-    def __init__(self, model, loss_fn, metrics=None, device=None):
-        super().__init__(model, loss_fn, metrics, device)
+    """STFPM Modeler for teacher-student feature pyramid matching using Template Method pattern."""
+    
+    def __init__(self, model, loss_fn=None, metrics=None, device=None, **kwargs):
+        super().__init__(model, loss_fn, metrics, device, **kwargs)
 
-    def train_step(self, inputs, optimizer):
-        self.model.train()
-        inputs = self.to_device(inputs)
+    # ========================================================================
+    # Hook Methods Implementation - Required by BaseModeler Template Methods
+    # ========================================================================
 
-        optimizer.zero_grad()
+    def _compute_loss(self, inputs):
+        """Hook: Compute STFPM loss from teacher-student features."""
         predictions = self.model(inputs['image'])
-
-        # Training mode: (teacher_features, student_features)
         teacher_features, student_features = predictions
-        loss = self.loss_fn(teacher_features, student_features)
-        loss.backward()
-        optimizer.step()
+        return self.loss_fn(teacher_features, student_features)
 
+    def _compute_predictions(self, inputs):
+        """Hook: Compute predictions for evaluation mode."""
+        return self.model(inputs['image'])
+
+    def _compute_prediction_scores(self, inputs):
+        """Hook: Compute prediction scores for inference."""
+        predictions = self.model(inputs['image'])
+        
+        # Return scores from InferenceBatch
+        if hasattr(predictions, 'pred_score'):
+            return predictions.pred_score
+        else:
+            # Fallback: compute from teacher-student feature differences
+            teacher_features, student_features = predictions
+            total_diff = 0
+            for layer in teacher_features:
+                diff = torch.mean((teacher_features[layer] - student_features[layer]) ** 2, dim=[1, 2, 3])
+                total_diff += diff
+            return total_diff
+
+    def _collect_training_results(self, inputs, loss):
+        """Hook: Collect STFPM training results and feature similarity metrics."""
         results = {'loss': loss.item()}
-
+        
         # Calculate feature similarity metrics
         with torch.no_grad():
+            # Get teacher-student features for metric calculation
+            predictions = self.model(inputs['image'])
+            teacher_features, student_features = predictions
+            
             for metric_name, metric_fn in self.metrics.items():
                 if metric_name == "feature_sim":
                     # Compute feature similarity for each layer and average
@@ -38,120 +61,67 @@ class STFPMModeler(BaseModeler):
 
         return results
 
-    @torch.no_grad()
-    def validate_step(self, inputs):
-        self.model.eval()
-        inputs = self.to_device(inputs)
+    def _collect_validation_results(self, inputs, loss):
+        """Hook: Collect STFPM validation results and feature similarity metrics."""
+        # Same as training results for STFPM
+        return self._collect_training_results(inputs, loss)
 
-        predictions = self.model(inputs['image'])
-
-        # Inference mode: InferenceBatch(pred_score, anomaly_map)
-        if hasattr(predictions, 'pred_score'):
-            scores = predictions.pred_score
-            labels = inputs['label']
-
-            # Normal vs Anomaly score distribution analysis (like PaDiM)
-            normal_mask = labels == 0
-            anomaly_mask = labels == 1
-
-            normal_scores = scores[normal_mask] if normal_mask.any() else torch.tensor([0.0])
-            anomaly_scores = scores[anomaly_mask] if anomaly_mask.any() else torch.tensor([0.0])
-
-            results = {
-                'loss': 0.0,  # No loss for inference mode
-                'score_mean': scores.mean().item(),
-                'score_std': scores.std().item(),
-                'normal_mean': normal_scores.mean().item(),
-                'anomaly_mean': anomaly_scores.mean().item(),
-                'separation': (anomaly_scores.mean() - normal_scores.mean()).item() if anomaly_mask.any() and normal_mask.any() else 0.0,
-            }
-        else:
-            # Training mode: (teacher_features, student_features)
-            teacher_features, student_features = predictions
-            loss = self.loss_fn(teacher_features, student_features)
-
-            results = {'loss': loss.item()}
-            for metric_name, metric_fn in self.metrics.items():
-                results[metric_name] = 0.0  # STFPM doesn't use reconstruction metrics
-
-        return results
-
-    @torch.no_grad()
-    def predict_step(self, inputs):
-        self.model.eval()
-        inputs = self.to_device(inputs)
-
-        predictions = self.model(inputs['image'])
-
-        # Inference mode: InferenceBatch(pred_score, anomaly_map)
-        if hasattr(predictions, 'pred_score'):
-            return predictions.pred_score
-        else:
-            # Fallback: if training mode output
-            teacher_features, student_features = predictions
-            # Compute feature difference as anomaly score
-            total_diff = 0
-            for layer in teacher_features:
-                diff = torch.mean((teacher_features[layer] - student_features[layer]) ** 2, dim=[1, 2, 3])
-                total_diff += diff
-            return total_diff
-
-    def compute_anomaly_scores(self, inputs):
-        self.model.eval()
-        inputs = self.to_device(inputs)
-
-        with torch.no_grad():
-            predictions = self.model(inputs['image'])
-
-            if hasattr(predictions, 'anomaly_map'):
-                return {
-                    'anomaly_maps': predictions.anomaly_map,
-                    'pred_scores': predictions.pred_score
-                }
-            else:
-                # Fallback: compute from teacher-student feature differences
-                teacher_features, student_features = predictions
-
-                # Use AnomalyMapGenerator from model to compute maps
-                if hasattr(self.model, 'anomaly_map_generator'):
-                    anomaly_map = self.model.anomaly_map_generator(
-                        teacher_features=teacher_features,
-                        student_features=student_features,
-                        image_size=inputs['image'].shape[-2:],
-                    )
-                    pred_scores = torch.amax(anomaly_map, dim=(-2, -1))
-
-                    return {
-                        'anomaly_maps': anomaly_map,
-                        'pred_scores': pred_scores
-                    }
-                else:
-                    # Simple fallback
-                    batch_size = next(iter(teacher_features.values())).shape[0]
-                    image_size = inputs['image'].shape[-2:]
-
-                    anomaly_maps = torch.zeros(batch_size, 1, *image_size, device=self.device)
-                    pred_scores = torch.zeros(batch_size, device=self.device)
-
-                    return {
-                        'anomaly_maps': anomaly_maps,
-                        'pred_scores': pred_scores
-                    }
-
-    def configure_optimizers(self):
-        return optim.AdamW(
-            params=self.model.student_model.parameters(),
-            lr=0.001,
-            weight_decay=0.01,
-        )
+    # ========================================================================
+    # Properties - Required by BaseModeler
+    # ========================================================================
 
     @property
     def learning_type(self):
+        """STFPM uses one-class learning."""
         return "one_class"
 
     @property
     def trainer_arguments(self):
+        """Get trainer arguments specific to STFPM."""
         return {
             "gradient_clip_val": 0,
             "num_sanity_val_steps": 0
         }
+
+    # ========================================================================
+    # Optional: Custom methods for advanced functionality
+    # ========================================================================
+
+    def _compute_detailed_anomaly_scores(self, inputs):
+        """Override: Compute detailed anomaly scores using STFPM-specific logic."""
+        predictions = self.model(inputs['image'])
+
+        if hasattr(predictions, 'anomaly_map') and hasattr(predictions, 'pred_score'):
+            return {
+                'anomaly_maps': predictions.anomaly_map,
+                'pred_scores': predictions.pred_score
+            }
+        else:
+            # Fallback: compute from teacher-student feature differences
+            teacher_features, student_features = predictions
+
+            # Use AnomalyMapGenerator from model if available
+            if hasattr(self.model, 'anomaly_map_generator'):
+                anomaly_map = self.model.anomaly_map_generator(
+                    teacher_features=teacher_features,
+                    student_features=student_features,
+                    image_size=inputs['image'].shape[-2:],
+                )
+                pred_scores = torch.amax(anomaly_map, dim=(-2, -1))
+
+                return {
+                    'anomaly_maps': anomaly_map,
+                    'pred_scores': pred_scores
+                }
+            else:
+                # Simple fallback
+                batch_size = next(iter(teacher_features.values())).shape[0]
+                image_size = inputs['image'].shape[-2:]
+
+                anomaly_maps = torch.zeros(batch_size, 1, *image_size, device=self.device)
+                pred_scores = torch.zeros(batch_size, device=self.device)
+
+                return {
+                    'anomaly_maps': anomaly_maps,
+                    'pred_scores': pred_scores
+                }

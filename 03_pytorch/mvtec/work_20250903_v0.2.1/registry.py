@@ -143,6 +143,8 @@ STOPPER_REGISTRY = {
     "epoch": EpochStopper,
 }
 
+LOGGER_REGISTRY = {}
+
 
 # ===================================================================
 # Factory Functions
@@ -170,7 +172,7 @@ def build_transform(transform_type, **transform_params):
     params = {}
     params.update(transform_params)
     return transform(**params)
-    
+
 
 def build_model(model_type, **model_params):
     model_type = model_type.lower()
@@ -218,19 +220,28 @@ def build_metrics(metric_list):
     return metrics
 
 
-def build_modeler(modeler_type, **modeler_params):
+def build_modeler(model, modeler_type, loss_fn=None, metrics=None, device=None, **kwargs):
     modeler_type = modeler_type.lower()
     if modeler_type not in MODELER_REGISTRY:
         available_modelers = list(MODELER_REGISTRY.keys())
         raise ValueError(f"Unknown modeler: {modeler_type}. Available modelers: {available_modelers}")
 
-    modeler = MODELER_REGISTRY.get(modeler_type)
-    params = {}
-    params.update(modeler_params)
-    return modeler(**params)
+    modeler_class = MODELER_REGISTRY.get(modeler_type)
+
+    modeler_params = {
+        'loss_fn': loss_fn,
+        'metrics': metrics,
+        'device': device,
+    }
+    modeler_params.update(kwargs)
+
+    # Remove None values to let modeler use defaults
+    modeler_params = {k: v for k, v in modeler_params.items() if v is not None}
+
+    return modeler_class(model, **modeler_params)
 
 
-def build_trainer(modeler, trainer_type, **trainer_params):
+def build_trainer(modeler, optimizer, trainer_type, **trainer_params):
     trainer_type = trainer_type.lower()
     if trainer_type not in TRAINER_REGISTRY:
         available_trainers = list(TRAINER_REGISTRY.keys())
@@ -239,7 +250,7 @@ def build_trainer(modeler, trainer_type, **trainer_params):
     trainer = TRAINER_REGISTRY.get(trainer_type)
     params = {}
     params.update(trainer_params)
-    return trainer(modeler, **params)
+    return trainer(modeler, optimizer, **params)
 
 
 def build_optimizer(model, optimizer_type, **optimizer_params):
@@ -300,134 +311,19 @@ def build_stopper(stopper_type, **stopper_params):
     params.update(stopper_params)
     return stopper(**params)
 
-# ===================================================================
-# Helper functions
-# ===================================================================
 
-# ---- Helper functions for dataloader parameters ----
-def _get_dataloader_params(model_type, dataloader_type, base_params):
-    dataloader_params = base_params.copy()
+def build_logger(logger_type, **logger_params):
+    if logger_type is None or logger_type.lower() == "none":
+        return None
 
-    if model_type in ["patchcore", "padim"]:
-        dataloader_params["shuffle_train"] = False
-        dataloader_params["shuffle_test"] = False
-    else:
-        dataloader_params["shuffle_train"] = True
-        dataloader_params["shuffle_test"] = False
+    logger_type = logger_type.lower()
+    if logger_type not in LOGGER_REGISTRY:
+        available_stoppers = list(LOGGER_REGISTRY.keys())
+        raise ValueError(f"Unknown logger: {logger_type}. Available loggers: {available_stoppers}")
 
-    return dataloader_params
+    logger = LOGGER_REGISTRY.get(logger_type)
+    params = {}
+    params.update(logger_params)
+    return logger(**params)
 
 
-# ===================================================================
-# Main orchestrator
-# ===================================================================
-
-def run_experiment(dataloader_type, model_type, config):
-    dataset_loader_class = DATALOADER_REGISTRY.get(dataloader_type.lower())
-    if dataset_loader_class is None:
-        available_dataloaders = list(DATALOADER_REGISTRY.keys())
-        raise ValueError(f"Unknown dataloader: {dataloader_type}. Available datasets: {available_dataloaders}")
-
-    if model_type.lower() not in MODELER_REGISTRY:
-        available_models = list(MODELER_REGISTRY.keys())
-        raise ValueError(f"Unknown model_type: {model_type}. Available: {available_models}")
-
-    base_dataloader_params = {
-        "train_batch_size": config.dataloader["train_batch_size"],
-        "test_batch_size": config.dataloader["test_batch_size"],
-        "num_workers": config.dataloader["num_workers"],
-        "pin_memory": config.dataloader["pin_memory"],
-    }
-    dataloader_params = _get_dataloader_params(model_type, dataloader_type, base_dataloader_params)
-
-    dataset_instance = dataset_loader_class(
-        dataloader_type=dataloader_type,
-        dataloader_params=getattr(config, "dataloader_params", {}),
-        categories=getattr(config, "categories", None),
-        img_size=config.dataloader["img_size"],
-        train_batch_size=dataloader_params["train_batch_size"],
-        test_batch_size=dataloader_params["test_batch_size"],
-        num_workers=dataloader_params["num_workers"],
-        shuffle_train=dataloader_params.get("shuffle_train", True),
-        shuffle_test=dataloader_params.get("shuffle_test", False),
-        pin_memory=dataloader_params.get("pin_memory", True),
-    )
-
-    train_loader = dataset_instance.get_train_loader()
-    valid_loader = dataset_instance.get_valid_loader()
-    test_loader = dataset_instance.get_test_loader()
-
-    model_params = getattr(config, "model_params", {})
-    modeler_params = getattr(config, "modeler_params", {})
-    modeler_params.update({"model_params": model_params})
-
-    try:
-        modeler = build_modeler(model_type, **modeler_params)
-    except Exception as e:
-        raise RuntimeError(f"Failed to create modeler for '{model_type}': {e}")
-
-    if config.loss_type and config.loss_type != "none":
-        try:
-            loss_function = build_loss(config.loss_type, **config.loss_params)
-            if hasattr(modeler, "set_loss_fn"):
-                modeler.set_loss_fn(loss_function)
-        except Exception as e:
-            warnings.warn(f"Failed to create loss function: {e}")
-
-    optimizer = None
-    if hasattr(modeler, "parameters") and config.optimizer_type and config.optimizer_type != "none":
-        try:
-            optimizer = build_optimizer(modeler, config.optimizer_type, **config.optimizer_params)
-        except Exception as e:
-            warnings.warn(f"Failed to create optimizer: {e}")
-
-    scheduler = None
-    if optimizer is not None and config.scheduler_type and config.scheduler_type != "none":
-        try:
-            scheduler = build_scheduler(optimizer, config.scheduler_type, **config.scheduler_params)
-        except Exception as e:
-            warnings.warn(f"Failed to create scheduler: {e}")
-
-    stopper = None
-    if hasattr(config, "stopper_type") and config.stopper_type and config.stopper_type != "none":
-        try:
-            stopper = build_stopper(config.stopper_type, **getattr(config, "stopper_params", {}))
-        except Exception as e:
-            warnings.warn(f"Failed to create stopper: {e}")
-
-    try:
-        trainer = build_trainer(modeler, config.trainer_type, **config.trainer_params)
-    except Exception as e:
-        raise RuntimeError(f"Failed to create trainer: {e}")
-
-    if hasattr(trainer, "set_optimizer") and optimizer is not None:
-        trainer.set_optimizer(optimizer)
-    if hasattr(trainer, "set_scheduler") and scheduler is not None:
-        trainer.set_scheduler(scheduler)
-    if hasattr(trainer, "set_stopper") and stopper is not None:
-        trainer.set_stopper(stopper)
-
-    epochs = config.trainer_params.get("epochs", 1)
-
-    print(f"  Training {model_type} on {dataloader_type} for {epochs} epochs...")
-    history = trainer.fit(train_loader, num_epochs=epochs, valid_loader=valid_loader)
-
-    print(f"  Predicting on test set...")
-    scores, labels = trainer.predict(test_loader)
-
-    return {
-        "history": history,
-        "scores": scores,
-        "labels": labels,
-        "config_summary": {
-            "train_batch": dataloader_params["train_batch_size"],
-            "test_batch": dataloader_params["test_batch_size"],
-            "epochs": epochs,
-            "shuffle_train": dataloader_params.get("shuffle_train", True),
-        }
-    }
-
-def get_available_combinations():
-    available_dataloaders = list(DATALOADER_REGISTRY.keys())
-    available_models = list(MODELER_REGISTRY.keys())
-    return available_dataloaders, available_models

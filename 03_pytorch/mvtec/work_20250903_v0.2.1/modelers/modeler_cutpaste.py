@@ -7,7 +7,7 @@ from .modeler_base import BaseModeler
 
 
 class CutPasteModeler(BaseModeler):
-    def __init__(self, model, loss_fn, metrics=None, device=None):
+    def __init__(self, model, loss_fn=None, metrics=None, device=None):
         super().__init__(model, loss_fn, metrics, device)
         self._gmm_fitted = False
 

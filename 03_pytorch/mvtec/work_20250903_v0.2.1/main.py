@@ -7,20 +7,6 @@ from registry import build_dataloader, build_transform
 from registry import build_model, build_loss_fn, build_metrics, build_modeler
 from registry import build_optimizer, build_scheduler, build_stopper, build_trainer
 
-"""
-## 2. Modeler
-model = build_model(config.model_type, **config.model_params)
-loss_fn = build_loss_fn(config.loss_type, **config.loss_params)
-metrics = build_metrics(config.metric_list)
-modeler = build_modeler(model, config.modeler_type, loss_fn=loss_fn, metrics=metrics)
-
-## 3. Trainer
-optimizer = build_optimizer(model, config.optimizer_type, **config.optimizer_params)
-scheduler = build_scheduler(optimizer, config.scheduler_type, **config.scheduler_params)
-stopper = build_stopper(config.stopper_type, **config.stopper_params)
-logger = build_logger(config.logger_type, **config.logger_params)
-trainer = build_trainer(modeler, optimizer, config.trainer_type, scheduler=scheduler, stopper=stopper, logger=logger)
-"""
 
 def run_experiment(config):
     try:
@@ -36,14 +22,14 @@ def run_experiment(config):
         model = build_model(config.model_type, **config.model_params)
         loss_fn = build_loss_fn(config.loss_type, **config.loss_params)
         metrics = build_metrics(config.metric_list)
-        modeler = build_modeler(config.modeler_type, model=model, loss_fn=loss_fn, metrics=metrics)
+        modeler = build_modeler(model, config.modeler_type, loss_fn=loss_fn, metrics=metrics)
 
         ## 3. Trainer
         optimizer = build_optimizer(model, config.optimizer_type, **config.optimizer_params)
         scheduler = build_scheduler(optimizer, config.scheduler_type, **config.scheduler_params)
         stopper = build_stopper(config.stopper_type, **config.stopper_params)
-        trainer = build_trainer(modeler, config.trainer_type, scheduler=scheduler, stopper=stopper)
-        trainer.optimizer = optimizer
+        logger = None
+        trainer = build_trainer(modeler, optimizer, config.trainer_type, scheduler=scheduler, stopper=stopper, logger=logger)
 
         show_gpu_memory("After model creaton")
 
@@ -87,13 +73,15 @@ if __name__ == "__main__":
     # config.dataloader_params["categories"] = ["bottle"]
     # run_experiment(config)
 
-    # config = build_config("mvtec", "unet_ae", "gradient")
+    config = build_config("mvtec", "stfpm", "gradient")
+    config.dataloader_params["categories"] = ["bottle"]
+    config.optimizer_params["lr"] = 1e-3
+    config.num_epochs = 10
+    run_experiment(config)
+
+    # config = build_config("visa", "stfpm", "gradient")
     # config.dataloader_params["categories"] = ["bottle"]
     # run_experiment(config)
-
-    config = build_config("visa", "stfpm", "gradient")
-    # config.dataloader_params["categories"] = ["bottle"]
-    run_experiment(config)
 
     # config = build_config("btad", "vanilla_ae", "gradient")
     # config.dataloader_params["categories"] = ["01"]
