@@ -3,12 +3,12 @@ from metrics.metrics_base import AUROCMetric, AUPRMetric, OptimalThresholdMetric
 from metrics.metrics_base import AccuracyMetric, PrecisionMetric, RecallMetric, F1Metric
 
 
-def get_memory_usage():
-    """Get current memory usage for monitoring."""
-    if torch.cuda.is_available():
-        gpu_memory = torch.cuda.memory_allocated() / 1024**3  # GB
-        return f"GPU: {gpu_memory:.2f}GB"
-    return "CPU mode"
+def show_gpu_memory(stage):
+    allocated = torch.cuda.memory_allocated()
+    reserved = torch.cuda.memory_reserved()
+    print(f"[{stage}]")
+    print(f" > Allocated: {allocated / 1024**2:.2f} MB")
+    print(f" > Reserved:  {reserved / 1024**2:.2f} MB")
 
 
 def count_labels(dataset):
