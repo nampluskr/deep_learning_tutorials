@@ -83,17 +83,17 @@ def run_experiment(config):
 
 if __name__ == "__main__":
 
-    # config = build_config("mvtec", "vanilla_ae", "gradient")
-    # config.dataloader_params["categories"] = ["bottle"]
-    # run_experiment(config)
+    config = build_config("mvtec", "stfpm", "gradient")
+    config.dataloader_params["categories"] = ["bottle"]
+    run_experiment(config)
 
     # config = build_config("mvtec", "unet_ae", "gradient")
     # config.dataloader_params["categories"] = ["bottle"]
     # run_experiment(config)
 
-    config = build_config("visa", "stfpm", "gradient")
+    # config = build_config("visa", "stfpm", "gradient")
     # config.dataloader_params["categories"] = ["bottle"]
-    run_experiment(config)
+    # run_experiment(config)
 
     # config = build_config("btad", "vanilla_ae", "gradient")
     # config.dataloader_params["categories"] = ["01"]
