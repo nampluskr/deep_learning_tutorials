@@ -61,6 +61,8 @@ anomaly_framework/
 - Modeler 코드 스타일은 lighting 스타일을 참고하여 작성한 것인데, 중요한 차이점이 있습니다.
 - validation step은 training step과 동일한 연산을 하되 backpropagation만 생략한 것 입니다.
 
+- 템플릿 패턴이나 hook 없이 Base에서 모든 메서드를 구현하고, 하위 클래스에서 오버라이딩하는 방식으로 작성
+
 #### Lightning 표준 패턴 적용
 training_step(batch, optimizer)     # 역전파 포함
 validation_step(batch)              # 역전파 없음 - 학습 중 검증 (training mode 유지)
