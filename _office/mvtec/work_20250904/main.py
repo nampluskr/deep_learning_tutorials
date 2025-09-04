@@ -422,9 +422,9 @@ def run_experiment(config):
 
 def show_gpu_memory(verbose=True):
     if verbose:
-        print("\n" + "="*60)
+        print("\n" + "-"*60)
         print("GPU MEMORY")
-        print("="*60)
+        print("-"*60)
         print(f" > Max allocated:     {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB")
         print(f" > Max reserved:      {torch.cuda.max_memory_reserved() / 1024**2:.2f} MB")
         print("-"*60)
