@@ -10,7 +10,7 @@ import torch
 from types import SimpleNamespace
 
 BASE_CONFIGS = SimpleNamespace(
-    backbone_dir="/mnt/d/github/deep_learning_tutorials/_project/odvad_test/backbones",
+    backbone_dir="/mnt/d/backbones",
     output_dir="./experiments",
     num_epochs=10,
     seed=42,
@@ -92,12 +92,12 @@ MODEL_CONFIGS = {
     "fastflow": SimpleNamespace(
         modeler_type="fastflow",
         trainer_type="reconstruction",
-        
+
         model_type="fastflow",
         model_params=dict(
-            backbone="resnet18", 
-            flow_steps=8, 
-            conv3x3_only=False, 
+            backbone="resnet18",
+            flow_steps=8,
+            conv3x3_only=False,
             hidden_ratio=1.0
         ),
         loss_type="fastflow",
@@ -468,35 +468,37 @@ def build_stopper(stopper_type, **stopper_params):
 
 def run_experiment(config):
     try:
+        from model_base import set_backbone_dir
+        from trainer import get_logger
+        
         torch.cuda.reset_peak_memory_stats()
         set_seed(config.seed)
+        set_backbone_dir(config.backbone_dir)
 
-        print("\n" + "="*60)
-        print(f"RUN EXPERIMENT: {config.dataloader_type.upper()} - "
-              f"{config.model_type.upper()} - {config.trainer_type.upper()} Trainer")
-        print("="*60)
+        logger = get_logger(config.output_dir)
+        show_header(config, logger=logger)
 
         ## 1. Data loaders
         train_transform = build_transform(config.train_transform_type, **config.train_transform_params)
         test_transform = build_transform(config.test_transform_type, **config.test_transform_params)
         data = build_dataloader(config.dataloader_type, **config.dataloader_params,
             train_transform=train_transform, test_transform=test_transform)
-        show_dataloader_info(data, verbose=config.show_dataloader)
+        show_dataloader_info(data, verbose=config.show_dataloader, logger=logger)
 
         ## 2. Modeler
         model = build_model(config.model_type, **config.model_params)
         loss_fn = build_loss_fn(config.loss_type, **config.loss_params)
         metrics = build_metrics(config.metric_list)
         modeler = build_modeler(config.modeler_type, model=model, loss_fn=loss_fn, metrics=metrics)
-        show_modeler_info(modeler, verbose=config.show_modeler)
+        show_modeler_info(modeler, verbose=config.show_modeler, logger=logger)
 
         ## 3. Trainer
         optimizer = build_optimizer(config.optimizer_type, model=model, **config.optimizer_params)
         scheduler = build_scheduler(config.scheduler_type, optimizer=optimizer, **config.scheduler_params)
         stopper = build_stopper(config.stopper_type, **config.stopper_params)
         trainer = build_trainer(config.trainer_type, modeler=modeler, optimizer=optimizer,
-            scheduler=scheduler, stopper=stopper)
-        show_trainer_info(trainer, verbose=config.show_trainer)
+            scheduler=scheduler, stopper=stopper, logger=logger)
+        show_trainer_info(trainer, verbose=config.show_trainer, logger=logger)
 
         ## 4. Training & Evaluation
         history = trainer.fit(data.train_loader(), config.num_epochs, valid_loader=data.valid_loader())
@@ -534,24 +536,12 @@ def run_experiment(config):
         gc.collect()
 
         torch.cuda.empty_cache()
-        show_gpu_memory(config.show_memory)
+        show_gpu_memory(config.show_memory, logger=logger)
 
 
 # ===================================================================
 # Utility Functions
 # ===================================================================
-
-def show_gpu_memory(verbose=True):
-    if verbose:
-        print("\n" + "-"*60)
-        print("GPU MEMORY")
-        print("-"*60)
-        print(f" > Max allocated:     {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB")
-        print(f" > Max reserved:      {torch.cuda.max_memory_reserved() / 1024**2:.2f} MB")
-        print("-"*60)
-        print(f" > Current allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
-        print(f" > Current reserved:  {torch.cuda.memory_reserved() / 1024**2:.2f} MB")
-
 
 def count_labels(dataset):
     from torch.utils.data import Subset, ConcatDataset
@@ -574,92 +564,158 @@ def count_labels(dataset):
     return normal_count, anomaly_count
 
 
-def show_dataloader_info(dataloader, verbose=True):
-    if verbose:
-        print()
-        print(f" > Dataset Type:      {dataloader.data_dir}")
-        print(f" > Categories:        {dataloader.categories}")
+def show_header(config, logger=None):
+    """Show experiment header information."""
+    header_line = "\n" + "="*60
+    exp_line = f"RUN EXPERIMENT: {config.dataloader_type.upper()} - " \
+               f"{config.model_type.upper()} - {config.trainer_type.upper()} Trainer"
+    footer_line = "="*60
+    
+    # Console output with newline
+    print(header_line)
+    print(exp_line)
+    print(footer_line)
+    
+    # Log output with leading newline
+    if logger:
+        logger.info(" ")  # 줄바꿈을 빈 공간으로 기록
+        logger.info("="*60)
+        logger.info(exp_line)
+        logger.info("="*60)
 
+
+def show_dataloader_info(dataloader, verbose=True, logger=None):
+    if verbose:
+        info_lines = [
+            "",
+            f" > Dataset Type:      {dataloader.data_dir}",
+            f" > Categories:        {dataloader.categories}"
+        ]
         train = dataloader.train_loader().dataset
         normal, anomal = count_labels(train)
-        print(f" > Train data:        {len(train)} (normal={normal}, anomaly={anomal})")
+        info_lines.append(f" > Train data:        {len(train)} (normal={normal}, anomaly={anomal})")
 
         valid = None if dataloader.valid_loader() is None else dataloader.valid_loader().dataset
         if valid is not None:
             normal, anomal = count_labels(valid)
-            print(f" > Valid data:        {len(valid)} (normal={normal}, anomaly={anomal})")
+            info_lines.append(f" > Valid data:        {len(valid)} (normal={normal}, anomaly={anomal})")
 
         test = dataloader.test_loader().dataset
         normal, anomal = count_labels(test)
-        print(f" > Test data:         {len(test)} (normal={normal}, anomaly={anomal})")
+        info_lines.append(f" > Test data:         {len(test)} (normal={normal}, anomaly={anomal})")
+
+        for line in info_lines:
+            print(line)
+            if logger:
+                if line == "": logger.info(" ")
+                else: logger.info(line)
 
 
-def show_modeler_info(modeler, verbose=True):
+def show_modeler_info(modeler, verbose=True, logger=None):
     if verbose:
-        print()
-        print(f" > Modeler Type:      {type(modeler).__name__}")
-        print(f" > Model Type:        {type(modeler.model).__name__}")
-        print(f" > Total params.:     "
-            f"{sum(p.numel() for p in modeler.model.parameters()):,}")
-        print(f" > Trainable params.: "
-            f"{sum(p.numel() for p in modeler.model.parameters() if p.requires_grad):,}")
-        # print(f" > Learning Type:     {modeler.learning_type}")
-        print(f" > Loss Function:     {type(modeler.loss_fn).__name__}")
-        print(f" > Metrics:           {list(modeler.metrics.keys())}")
-        print(f" > Device:            {modeler.device}")
+        info_lines = [
+            "",
+            f" > Modeler Type:      {type(modeler).__name__}",
+            f" > Model Type:        {type(modeler.model).__name__}",
+            f" > Total params.:     {sum(p.numel() for p in modeler.model.parameters()):,}",
+            f" > Trainable params.: {sum(p.numel() for p in modeler.model.parameters() if p.requires_grad):,}",
+            f" > Loss Function:     {type(modeler.loss_fn).__name__}",
+            f" > Metrics:           {list(modeler.metrics.keys())}",
+            f" > Device:            {modeler.device}"
+        ]
+    for line in info_lines:
+            print(line)
+            if logger:
+                if line == "": logger.info(" ")
+                else: logger.info(line)
 
 
-def show_trainer_info(trainer, verbose=True):
+def show_trainer_info(trainer, verbose=True, logger=None):
     if verbose:
-        print()
-        # print(f" > Trainer Type:      {trainer.trainer_type}")
-        print(f" > Optimizer:         {type(trainer.optimizer).__name__}")
-        print(f" > Learning Rate:     {trainer.optimizer.param_groups[0]['lr']}")
-
+        info_lines = [
+            "",
+            f" > Optimizer:         {type(trainer.optimizer).__name__}",
+            f" > Learning Rate:     {trainer.optimizer.param_groups[0]['lr']}"
+        ]
         if trainer.scheduler is not None:
-            print(f" > Scheduler:         {type(trainer.scheduler).__name__}")
+            info_lines.append(f" > Scheduler:         {type(trainer.scheduler).__name__}")
         else:
-            print(f" > Scheduler:         None")
+            info_lines.append(f" > Scheduler:         None")
 
         if trainer.stopper is not None:
-            print(f" > Stopper:           {type(trainer.stopper).__name__}")
+            info_lines.append(f" > Stopper:           {type(trainer.stopper).__name__}")
             if hasattr(trainer.stopper, 'patience'):
-                print(f" > Patience:          {trainer.stopper.patience}")
+                info_lines.append(f" > Patience:          {trainer.stopper.patience}")
             if hasattr(trainer.stopper, 'min_delta'):
-                print(f" > Min Delta:         {trainer.stopper.min_delta}")
+                info_lines.append(f" > Min Delta:         {trainer.stopper.min_delta}")
             if hasattr(trainer.stopper, 'max_epoch'):
-                print(f" > Max Epochs:        {trainer.stopper.max_epoch}")
+                info_lines.append(f" > Max Epochs:        {trainer.stopper.max_epoch}")
         else:
-            print(f" > Stopper:           None")
+            info_lines.append(f" > Stopper:           None")
+
+        for line in info_lines:
+            print(line)
+            if logger:
+                if line == "": logger.info(" ")
+                else: logger.info(line)
 
 
-def show_results(results):
-    print("\n" + "-"*60)
-    print("EXPERIMENT RESULTS")
-    print("-"*60)
-    print(f" > AUROC:             {results['auroc']:.4f}")
-    print(f" > AUPR:              {results['aupr']:.4f}")
-    print(f" > Threshold:         {results['threshold']:.3e}")
-    print("-"*60)
-    print(f" > Accuracy:          {results['accuracy']:.4f}")
-    print(f" > Precision:         {results['precision']:.4f}")
-    print(f" > Recall:            {results['recall']:.4f}")
-    print(f" > F1-Score:          {results['f1']:.4f}")
+def show_results(results, logger=None):
+    result_lines = [
+        "",
+        "-" * 60,
+        "EXPERIMENT RESULTS",
+        "-" * 60,
+        f" > AUROC:             {results['auroc']:.4f}",
+        f" > AUPR:              {results['aupr']:.4f}",
+        f" > Threshold:         {results['threshold']:.3e}",
+        "-" * 60,
+        f" > Accuracy:          {results['accuracy']:.4f}",
+        f" > Precision:         {results['precision']:.4f}",
+        f" > Recall:            {results['recall']:.4f}",
+        f" > F1-Score:          {results['f1']:.4f}"
+    ]
+    for line in result_lines:
+        print(line)
+        if logger:
+            if line == "": logger.info(" ")
+            else: logger.info(line)
+
+
+def show_gpu_memory(verbose=True, logger=None):
+    if verbose:
+        memory_lines = [
+            "",
+            "-" * 60,
+            "GPU MEMORY",
+            "-" * 60,
+            f" > Max allocated:     {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB",
+            f" > Max reserved:      {torch.cuda.max_memory_reserved() / 1024**2:.2f} MB",
+            "-" * 60,
+            f" > Current allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB",
+            f" > Current reserved:  {torch.cuda.memory_reserved() / 1024**2:.2f} MB"
+        ]
+        for line in memory_lines:
+            print(line)
+            if logger:
+                if line == "": logger.info(" ")
+                else: logger.info(line)
 
 
 def run(data_type, model_type, categories=[], verbose=False):
     config = build_config(data_type, model_type)
+    config.output_dir += f"_{data_type.lower()}_{model_type.lower()}"
     config.dataloader_params["categories"] = categories
     config.verbose = verbose
     config.show_dataloader=True
     config.show_modeler=True
     config.show_trainer=True
     config.show_memory=True
-    config.num_epochs = 20
-    
+    config.num_epochs = 5
+
     if model_type in ["fastflow"]:
         config.optimizer_params=dict(lr=1e-5, weight_decay=1e-5)
-    
+
     run_experiment(config)
 
 
@@ -679,13 +735,13 @@ def get_device():
 
 if __name__ == "__main__":
 
-    categories=["bottle", "tile"]
-    # run("mvtec", "vanilla_ae", categories=categories)
-    # run("mvtec", "unet_ae", categories=categories)
-    # run("mvtec", "vanilla_vae", categories=categories)
-    # run("mvtec", "unet_vae", categories=categories)
+    categories=["bottle"]
+    run("mvtec", "vanilla_ae", categories=categories)
+    run("mvtec", "unet_ae", categories=categories)
+    run("mvtec", "vanilla_vae", categories=categories)
+    run("mvtec", "unet_vae", categories=categories)
 
-    # run("mvtec", "stfpm", categories=categories)
+    run("mvtec", "stfpm", categories=categories)
     # run("mvtec", "fastflow", categories=categories)
     # run("mvtec", "draem", categories=categories)
-    run("mvtec", "efficientad", categories=categories)
+    # run("mvtec", "efficientad", categories=categories)

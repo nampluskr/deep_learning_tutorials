@@ -37,6 +37,15 @@ BACKBONE_WEIGHT_FILES = {
     "vgg16": "vgg16-397923af.pth",
     "alexnet": "alexnet-owt-7be5be79.pth",
     "squeezenet1_1": "squeezenet1_1-b8a52dc0.pth",
+
+    # EfficientAD teacher weights
+    "efficientad_teacher_small": "pretrained_teacher_small.pth",
+    "efficientad_teacher_medium": "pretrained_teacher_medium.pth",
+
+    # LPIPS weights (for future use)
+    "lpips_alex": "lpips_alex.pth",
+    "lpips_vgg": "lpips_vgg.pth", 
+    "lpips_squeeze": "lpips_squeeze.pth"
 }
 
 
