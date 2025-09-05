@@ -27,9 +27,9 @@ DATA_CONFIGS = {
         dataloader_params=dict(
             data_dir="/mnt/d/datasets/mvtec",
             categories=["bottle", "cable", "capsule"],
-            train_batch_size=16, test_batch_size=8,
+            train_batch_size=4, test_batch_size=2,
             test_ratio=0.15, valid_ratio=0.15,
-            num_workers=8, pin_memory=True, persistent_workers=True,
+            num_workers=4, pin_memory=True, persistent_workers=True,
         ),
         train_transform_type="train",
         train_transform_params=dict(img_size=256),
@@ -103,6 +103,15 @@ MODEL_CONFIGS = {
         loss_type="fastflow",
         loss_params=dict(),
         metric_list=[("likelihood", dict())],
+    ),
+    "draem": SimpleNamespace(
+        modeler_type="draem",
+        trainer_type="reconstruction",
+        model_type="draem",
+        model_params=dict(sspcab=False),
+        loss_type="draem",
+        loss_params=dict(),
+        metric_list=[("auroc", dict()), ("aupr", dict())],
     ),
 }
 
@@ -181,6 +190,7 @@ from model_ae import VanillaAE, UNetAE, AELoss
 from model_vae import VanillaVAE, UNetVAE, VAELoss
 from model_stfpm import STFPMModel, STFPMLoss
 from model_fastflow import FastFlowModel, FastFlowLoss
+from model_draem import DRAEMModel, DRAEMLoss
 
 MODEL_REGISTRY = {
     "vanilla_ae": VanillaAE,
@@ -189,6 +199,7 @@ MODEL_REGISTRY = {
     "unet_vae": UNetVAE,
     "stfpm": STFPMModel,
     "fastflow": FastFlowModel,
+    "draem": DRAEMModel,
 }
 
 LOSS_REGISTRY = {
@@ -196,6 +207,7 @@ LOSS_REGISTRY = {
     "vae": VAELoss,
     "stfpm": STFPMLoss,
     "fastflow": FastFlowLoss,
+    "draem": DRAEMLoss,
 }
 
 # ===================================================================
@@ -225,13 +237,14 @@ METRIC_REGISTRY = {
 # Modelers
 # ===================================================================
 
-from modeler import AEModeler, VAEModeler, STFPMModeler, FastFlowModeler
+from modeler import AEModeler, VAEModeler, STFPMModeler, FastFlowModeler, DRAEMModeler
 
 MODELER_REGISTRY = {
     "ae": AEModeler,
     "vae": VAEModeler,
     "stfpm": STFPMModeler,
     "fastflow": FastFlowModeler,
+    "draem": DRAEMModeler,
 }
 
 
@@ -622,7 +635,7 @@ def run(data_type, model_type, categories=[], verbose=False):
     config.show_modeler=True
     config.show_trainer=True
     config.show_memory=True
-    config.num_epochs = 20
+    config.num_epochs = 5
     
     if model_type in ["fastflow"]:
         config.optimizer_params=dict(lr=1e-5, weight_decay=1e-5)
@@ -653,4 +666,5 @@ if __name__ == "__main__":
     # run("mvtec", "unet_vae", categories=categories)
     # run("mvtec", "stfpm", categories=categories)
 
-    run("mvtec", "fastflow", categories=categories)
+    # run("mvtec", "fastflow", categories=categories)
+    run("mvtec", "draem", categories=categories)

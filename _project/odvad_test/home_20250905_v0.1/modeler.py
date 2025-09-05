@@ -564,5 +564,129 @@ class FastFlowModeler(BaseModeler):
                 'gt_labels': inputs['label']
             }
 
+
+# ===================================================================
+# DRAEM Modeler
+# ===================================================================
+
+
+# modeler.py에서 DRAEMModeler 수정
+
+class DRAEMModeler(BaseModeler):
+    """Modeler for DRAEM anomaly detection with synthetic anomaly training."""
+    
+    def __init__(self, model, loss_fn=None, metrics=None, device=None):
+        super().__init__(model, loss_fn, metrics, device)
+        # Note: PerlinAnomalyGenerator is built into the model
+
+    def train_step(self, inputs, optimizer):
+        """Training with synthetic anomaly generation."""
+        self.model.train()
+        inputs = self.to_device(inputs)
+
+        optimizer.zero_grad()
+        
+        # DRAEM training: model handles synthetic anomaly generation internally
+        model_outputs = self.model(inputs['image'])
+        
+        # Extract training outputs
+        input_image = model_outputs['input_image']
+        reconstruction = model_outputs['reconstruction']
+        anomaly_mask = model_outputs['anomaly_mask']
+        prediction = model_outputs['prediction']
+        
+        # DRAEM loss calculation
+        loss = self.loss_fn(input_image, reconstruction, anomaly_mask, prediction)
+        
+        loss.backward()
+        optimizer.step()
+
+        results = {'loss': loss.item()}
+        
+        # DRAEM 학습 중 메트릭 계산 (synthetic anomaly 사용)
+        with torch.no_grad():
+            # 생성된 synthetic anomaly mask를 ground truth로 사용
+            gt_labels = anomaly_mask.flatten()  # [B*H*W]
+            pred_scores = torch.softmax(prediction, dim=1)[:, 1, :, :].flatten()  # [B*H*W]
+            
+            # 픽셀 레벨에서 AUROC/AUPR 계산
+            for metric_name, metric_fn in self.metrics.items():
+                if metric_name in ['auroc', 'aupr']:
+                    try:
+                        # 정상과 이상 픽셀이 모두 있는 경우만 계산
+                        if len(torch.unique(gt_labels)) > 1:
+                            metric_value = metric_fn(gt_labels, pred_scores)
+                            results[metric_name] = float(metric_value)
+                        else:
+                            results[metric_name] = 0.0
+                    except:
+                        results[metric_name] = 0.0
+                else:
+                    results[metric_name] = 0.0
+
+        return results
+
+    def validation_step(self, inputs):
+        """Validation step for DRAEM."""
+        self.model.train()  # Keep training mode for validation (synthetic anomaly generation)
+        inputs = self.to_device(inputs)
+
+        with torch.no_grad():
+            # Generate synthetic anomalies for validation
+            model_outputs = self.model(inputs['image'])
+            
+            # Extract training outputs
+            input_image = model_outputs['input_image']
+            reconstruction = model_outputs['reconstruction']
+            anomaly_mask = model_outputs['anomaly_mask']
+            prediction = model_outputs['prediction']
+            
+            loss = self.loss_fn(input_image, reconstruction, anomaly_mask, prediction)
+
+            results = {'loss': loss.item()}
+            
+            # Validation 중 메트릭 계산 (synthetic anomaly 사용)
+            gt_labels = anomaly_mask.flatten()
+            pred_scores = torch.softmax(prediction, dim=1)[:, 1, :, :].flatten()
+            
+            for metric_name, metric_fn in self.metrics.items():
+                if metric_name in ['auroc', 'aupr']:
+                    try:
+                        if len(torch.unique(gt_labels)) > 1:
+                            metric_value = metric_fn(gt_labels, pred_scores)
+                            results[metric_name] = float(metric_value)
+                        else:
+                            results[metric_name] = 0.0
+                    except:
+                        results[metric_name] = 0.0
+                else:
+                    results[metric_name] = 0.0
+
+        return results
+
+    def predict_step(self, inputs):
+        """Deployment-optimized prediction step for DRAEM."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            return {
+                'pred_scores': predictions['pred_score'],
+                'anomaly_maps': predictions['anomaly_map']
+            }
+
+    def test_step(self, inputs):
+        """Evaluation-focused test step for DRAEM."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            return {
+                'pred_scores': predictions['pred_score'],
+                'anomaly_maps': predictions['anomaly_map'],
+                'gt_labels': inputs['label']
+            }
 if __name__ == "__main__":
     pass
