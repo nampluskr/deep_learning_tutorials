@@ -285,7 +285,7 @@ class EfficientADModel(nn.Module):
 
 ## 필요한 anomalib 파일 요청
 
-**1순위 DRAEM 구현을 위해** 다음 파일들을 제공해주세요:
+**EfficientADModel 구현을 위해** 다음 파일들을 제공해주세요:
 
 ### 1. **핵심 파일 (필수)**
 - **torch_model.py**: DRAEM 메인 모델 클래스
@@ -308,4 +308,22 @@ class EfficientADModel(nn.Module):
 
 **중요** anomalib 라이브러리가 설치되지 않은 환경에서 FastFlow를 실행하기 위해 필요한 컴포넌트들을 코드를 요청하고, 사용자가 제공한 코드를 model_xxx.py에 통합해야 합니다.
 
-**DRAEM의 anomalib 파일들을 제공해주시면, 위의 패턴에 맞춰 모델별 특화된 `compute_anomaly_map`과 `compute_anomaly_score` 메서드를 포함하여 완전한 DRAEM 모델을 구현하겠습니다.**
+**EfficientADModel 의 anomalib 파일들을 제공해주시면, 위의 패턴에 맞춰 모델별 특화된 `compute_anomaly_map`과 `compute_anomaly_score` 메서드를 포함하여 완전한 DRAEM 모델을 구현하겠습니다.**
+
+
+### EfficientAD 파일
+```
+backbones/
+├── resnet18-f37072fd.pth
+├── resnet50-0676ba61.pth
+├── wide_resnet50_2-95faca4d.pth
+├── efficientnet_b0_ra-3dd342df.pth
+├── pretrained_teacher_small.pth      # <- 새로 추가
+├── pretrained_teacher_medium.pth     # <- 새로 추가
+└── imagenette2/                      # <- 선택적
+    ├── train/
+    └── val/
+```
+
+- Pre-trained Teacher 가중치: https://github.com/openvinotoolkit/anomalib/releases/download/efficientad_pretrained_weights/efficientad_pretrained_weights.zip
+- ImageNette 데이터셋 (선택적): https://s3.amazonaws.com/fast-ai-imageclas/imagenette2.tgz

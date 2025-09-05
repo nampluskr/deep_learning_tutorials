@@ -570,8 +570,6 @@ class FastFlowModeler(BaseModeler):
 # ===================================================================
 
 
-# modeler.py에서 DRAEMModeler 수정
-
 class DRAEMModeler(BaseModeler):
     """Modeler for DRAEM anomaly detection with synthetic anomaly training."""
     
@@ -688,5 +686,100 @@ class DRAEMModeler(BaseModeler):
                 'anomaly_maps': predictions['anomaly_map'],
                 'gt_labels': inputs['label']
             }
+
+
+
+# ===================================================================
+# FastFlow Modeler
+# ===================================================================
+
+class EfficientADModeler(BaseModeler):
+    """Modeler for EfficientAD student-teacher anomaly detection."""
+    
+    def __init__(self, model, loss_fn=None, metrics=None, device=None):
+        super().__init__(model, loss_fn, metrics, device)
+        # EfficientAD는 자체 loss 계산을 하므로 loss_fn은 사용하지 않음
+
+    def train_step(self, inputs, optimizer):
+        """Training step for EfficientAD model."""
+        self.model.train()
+        inputs = self.to_device(inputs)
+
+        optimizer.zero_grad()
+        
+        # EfficientAD training: (loss_st, loss_ae, loss_stae) 반환
+        loss_st, loss_ae, loss_stae = self.model(inputs['image'], batch_imagenet=None)
+        total_loss = loss_st + loss_ae + loss_stae
+        
+        total_loss.backward()
+        optimizer.step()
+
+        results = {
+            'loss': total_loss.item(),
+            'loss_st': loss_st.item(),
+            'loss_ae': loss_ae.item(), 
+            'loss_stae': loss_stae.item()
+        }
+        
+        # EfficientAD specific metrics
+        with torch.no_grad():
+            for metric_name, metric_fn in self.metrics.items():
+                if metric_name == "feature_sim":
+                    # Student-Teacher feature similarity 계산
+                    results[metric_name] = 1.0 / (1.0 + loss_st.item())  # 근사치
+                else:
+                    results[metric_name] = 0.0
+
+        return results
+
+    def validation_step(self, inputs):
+        """Validation step for EfficientAD model."""
+        self.model.train()  # Keep training mode for validation monitoring
+        inputs = self.to_device(inputs)
+
+        with torch.no_grad():
+            loss_st, loss_ae, loss_stae = self.model(inputs['image'], batch_imagenet=None)
+            total_loss = loss_st + loss_ae + loss_stae
+
+            results = {
+                'loss': total_loss.item(),
+                'loss_st': loss_st.item(),
+                'loss_ae': loss_ae.item(),
+                'loss_stae': loss_stae.item()
+            }
+            
+            for metric_name, metric_fn in self.metrics.items():
+                if metric_name == "feature_sim":
+                    results[metric_name] = 1.0 / (1.0 + loss_st.item())
+                else:
+                    results[metric_name] = 0.0
+
+        return results
+
+    def predict_step(self, inputs):
+        """Deployment-optimized prediction step for EfficientAD."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            return {
+                'pred_scores': predictions['pred_score'],
+                'anomaly_maps': predictions['anomaly_map']
+            }
+
+    def test_step(self, inputs):
+        """Evaluation-focused test step for EfficientAD."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            return {
+                'pred_scores': predictions['pred_score'],
+                'anomaly_maps': predictions['anomaly_map'],
+                'gt_labels': inputs['label']
+            }
+
 if __name__ == "__main__":
     pass

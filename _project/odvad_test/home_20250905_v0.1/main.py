@@ -113,13 +113,28 @@ MODEL_CONFIGS = {
         loss_params=dict(),
         metric_list=[("auroc", dict()), ("aupr", dict())],
     ),
+    "efficientad": SimpleNamespace(
+        modeler_type="efficientad",
+        trainer_type="reconstruction",
+
+        model_type="efficientad",
+        model_params=dict(
+            model_size="small",  # "small" or "medium"
+            teacher_out_channels=384,
+            padding=False,
+            pad_maps=True
+        ),
+        loss_type=None,  # EfficientAD는 자체 loss 계산
+        loss_params=dict(),
+        metric_list=[("feature_sim", dict())],
+    ),
 }
 
 TRAIN_CONFIGS = {
     "reconstruction": SimpleNamespace(
         trainer_type="reconstruction",
         optimizer_type="adamw",
-        optimizer_params=dict(lr=1e-5, weight_decay=1e-5),
+        optimizer_params=dict(lr=1e-3, weight_decay=1e-5),
         scheduler_type="plateau",
         scheduler_params=dict(),
         stopper_type="early",
@@ -191,6 +206,7 @@ from model_vae import VanillaVAE, UNetVAE, VAELoss
 from model_stfpm import STFPMModel, STFPMLoss
 from model_fastflow import FastFlowModel, FastFlowLoss
 from model_draem import DRAEMModel, DRAEMLoss
+from model_efficientad import EfficientADModel
 
 MODEL_REGISTRY = {
     "vanilla_ae": VanillaAE,
@@ -200,6 +216,7 @@ MODEL_REGISTRY = {
     "stfpm": STFPMModel,
     "fastflow": FastFlowModel,
     "draem": DRAEMModel,
+    "efficientad": EfficientADModel,
 }
 
 LOSS_REGISTRY = {
@@ -237,7 +254,8 @@ METRIC_REGISTRY = {
 # Modelers
 # ===================================================================
 
-from modeler import AEModeler, VAEModeler, STFPMModeler, FastFlowModeler, DRAEMModeler
+from modeler import AEModeler, VAEModeler
+from modeler import STFPMModeler, FastFlowModeler, DRAEMModeler, EfficientADModeler
 
 MODELER_REGISTRY = {
     "ae": AEModeler,
@@ -245,6 +263,7 @@ MODELER_REGISTRY = {
     "stfpm": STFPMModeler,
     "fastflow": FastFlowModeler,
     "draem": DRAEMModeler,
+    "efficientad": EfficientADModeler,
 }
 
 
@@ -664,7 +683,8 @@ if __name__ == "__main__":
     # run("mvtec", "unet_ae", categories=categories)
     # run("mvtec", "vanilla_vae", categories=categories)
     # run("mvtec", "unet_vae", categories=categories)
-    # run("mvtec", "stfpm", categories=categories)
 
+    # run("mvtec", "stfpm", categories=categories)
     # run("mvtec", "fastflow", categories=categories)
-    run("mvtec", "draem", categories=categories)
+    # run("mvtec", "draem", categories=categories)
+    run("mvtec", "efficientad", categories=categories)

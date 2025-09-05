@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # BACKBONE_DIR = os.path.abspath(os.path.join("..", "..", "backbones"))
-BACKBONE_DIR="/mnt/d/github/deep_learning_tutorials/_project/odvad_test/backbones"
+BACKBONE_DIR="/mnt/d/backbones"
 
 BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
