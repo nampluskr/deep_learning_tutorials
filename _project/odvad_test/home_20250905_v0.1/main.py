@@ -122,11 +122,12 @@ MODEL_CONFIGS = {
             model_size="small",  # "small" or "medium"
             teacher_out_channels=384,
             padding=False,
-            pad_maps=True
+            pad_maps=True,
+            use_imagenet_penalty=True,
         ),
         loss_type=None,  # EfficientAD는 자체 loss 계산
         loss_params=dict(),
-        metric_list=[("feature_sim", dict())],
+        metric_list=[("feature_sim", dict(similarity_fn='cosine'))],
     ),
 }
 
@@ -134,7 +135,7 @@ TRAIN_CONFIGS = {
     "reconstruction": SimpleNamespace(
         trainer_type="reconstruction",
         optimizer_type="adamw",
-        optimizer_params=dict(lr=1e-3, weight_decay=1e-5),
+        optimizer_params=dict(lr=1e-4, weight_decay=1e-5),
         scheduler_type="plateau",
         scheduler_params=dict(),
         stopper_type="early",
@@ -654,7 +655,7 @@ def run(data_type, model_type, categories=[], verbose=False):
     config.show_modeler=True
     config.show_trainer=True
     config.show_memory=True
-    config.num_epochs = 5
+    config.num_epochs = 20
     
     if model_type in ["fastflow"]:
         config.optimizer_params=dict(lr=1e-5, weight_decay=1e-5)

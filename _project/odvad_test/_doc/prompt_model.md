@@ -8,9 +8,10 @@
 - 5단계 Level 불량 수준 정량화, 유형 분류, 위치 감지
 
 ### 핵심 제약사항
-- **인터넷 연결 불가** 로컬 환경에서 동작
-- **anomalib 코드 그대로 사용** - 원본 수정 없이 활용
-- **순수 PyTorch 구현** - Lightning 의존성 제거
+- **인터넷 연결 불가** 로컬 환경에서 동작 / backbone 모델의 가중치를 미리 backbones 폴더에 저장해 놓음
+- **anomalib 코드 그대로 사용** - 원본 수정 없이 활용 / InferenceBatch 대신 딕셔너리 사용
+- **anomalib component 코드 그대로 사용** - 예. TimmFeatureExtractor 등
+- **순수 PyTorch 구현** - Lightning 의존성 제거 -> Modeler 래퍼 클래스로 작성
 - **모듈화된 아키텍처** - 팩토리 패턴으로 확장성 확보
 
 ## 현재 구현 완료된 시스템 아키텍처
@@ -308,7 +309,7 @@ class EfficientADModel(nn.Module):
 
 **중요** anomalib 라이브러리가 설치되지 않은 환경에서 FastFlow를 실행하기 위해 필요한 컴포넌트들을 코드를 요청하고, 사용자가 제공한 코드를 model_xxx.py에 통합해야 합니다.
 
-**EfficientADModel 의 anomalib 파일들을 제공해주시면, 위의 패턴에 맞춰 모델별 특화된 `compute_anomaly_map`과 `compute_anomaly_score` 메서드를 포함하여 완전한 DRAEM 모델을 구현하겠습니다.**
+**EfficientADModel 의 anomalib 파일들을 제공해주시면, 위의 패턴에 맞춰 모델별 특화된 `compute_anomaly_map`과 `compute_anomaly_score` 메서드를 포함하여 완전한 EfficientADModel 모델을 구현하겠습니다.**
 
 
 ### EfficientAD 파일
