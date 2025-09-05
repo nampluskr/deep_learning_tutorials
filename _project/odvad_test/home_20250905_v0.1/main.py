@@ -55,6 +55,22 @@ MODEL_CONFIGS = {
         loss_params=dict(),
         metric_list=[("psnr", dict())],   # (metric_type, matric_params)
     ),
+    "vanilla_vae": SimpleNamespace(
+        modeler_type="ae",
+        model_type="vanilla_vae",
+        model_params=dict(),
+        loss_type="vae",
+        loss_params=dict(),
+        metric_list=[("psnr", dict())],   # (metric_type, matric_params)
+    ),
+    "unet_vae": SimpleNamespace(
+        modeler_type="ae",
+        model_type="unet_vae",
+        model_params=dict(),
+        loss_type="vae",
+        loss_params=dict(),
+        metric_list=[("psnr", dict())],   # (metric_type, matric_params)
+    ),
     "stfpm": SimpleNamespace(
         modeler_type="stfpm",
         model_type="stfpm",
@@ -66,8 +82,8 @@ MODEL_CONFIGS = {
 }
 
 TRAIN_CONFIS = {
-    "gradient": SimpleNamespace(
-        trainer_type="gradient",
+    "reconstruction": SimpleNamespace(
+        trainer_type="reconstruction",
         optimizer_type="adamw",
         optimizer_params=dict(lr=1e-4, weight_decay=1e-5),
         scheduler_type="plateau",
@@ -133,16 +149,20 @@ TRANSFORM_REGISTRY = {
 import torch.nn as nn
 
 from model_ae import VanillaAE, UNetAE, AELoss
+from model_vae import VanillaVAE, UNetVAE, VAELoss
 from model_stfpm import STFPMModel, STFPMLoss
 
 MODEL_REGISTRY = {
     "vanilla_ae": VanillaAE,
     "unet_ae": UNetAE,
+    "vanilla_vae": VanillaVAE,
+    "unet_vae": UNetVAE,
     "stfpm": STFPMModel,
 }
 
 LOSS_REGISTRY = {
     "ae": AELoss,
+    "vae": VAELoss,
     "stfpm": STFPMLoss,
 }
 
@@ -185,10 +205,10 @@ MODELER_REGISTRY = {
 
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
-from trainer import GradientTrainer, EarlyStopper
+from trainer import ReconstructionTrainer, EarlyStopper
 
 TRAINER_REGISTRY = {
-    "gradient": GradientTrainer,
+    "reconstruction": ReconstructionTrainer,
 }
 
 OPTIMIZER_REGISTRY = {
@@ -411,7 +431,7 @@ def run_experiment(config):
 
         ## 4. Training & Evaluation
         history = trainer.fit(data.train_loader(), config.num_epochs, valid_loader=data.valid_loader())
-        results = trainer.evaluate(data.test_loader())
+        results = trainer.test(data.test_loader())
         show_results(results)
 
     finally:
@@ -587,6 +607,8 @@ def get_device():
 if __name__ == "__main__":
 
     categories=["bottle", "tile"]
-    run("mvtec", "vanilla_ae", "gradient", categories=categories)
-    run("mvtec", "unet_ae", "gradient", categories=categories)
-    run("mvtec", "stfpm", "gradient", categories=categories)
+    # run("mvtec", "vanilla_ae", "reconstruction", categories=categories)
+    # run("mvtec", "unet_ae", "reconstruction", categories=categories)
+    run("mvtec", "vanilla_vae", "reconstruction", categories=categories)
+    run("mvtec", "unet_vae", "reconstruction", categories=categories)
+    # run("mvtec", "stfpm", "reconstruction", categories=categories)

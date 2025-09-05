@@ -1,16 +1,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import NamedTuple
+from typing import Tuple
 
 from model_base import BaseModel, TimmFeatureExtractor, ConvBlock, DeconvBlock
 
 
 # =============================================================================
-# Vanilla AutoEncoder with Backbones
+# Vanilla Variational AutoEncoder
 # =============================================================================
 
-class VanillaEncoder(nn.Module):
+class VanillaVAEEncoder(nn.Module):
     def __init__(self, in_channels=3, latent_dim=512, backbone=None, layers=None):
         super().__init__()
         
@@ -28,12 +28,13 @@ class VanillaEncoder(nn.Module):
             self.feature_dims = self.backbone_extractor.out_dims
             total_features = sum(self.feature_dims)
             
-            # Feature fusion layer
+            # VAE latent space projection (mean and log_var)
             self.feature_fusion = nn.Sequential(
                 nn.AdaptiveAvgPool2d((1, 1)),
                 nn.Flatten(),
-                nn.Linear(total_features, latent_dim)
             )
+            self.fc_mu = nn.Linear(total_features, latent_dim)
+            self.fc_log_var = nn.Linear(total_features, latent_dim)
             
         else:
             # 기존 Conv-based encoder (backbone=None인 경우)
@@ -46,7 +47,8 @@ class VanillaEncoder(nn.Module):
                 ConvBlock(256, 512),
             )
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
-            self.fc = nn.Linear(512, latent_dim)
+            self.fc_mu = nn.Linear(512, latent_dim)
+            self.fc_log_var = nn.Linear(512, latent_dim)
 
     def forward(self, x):
         if self.use_backbone:
@@ -63,30 +65,38 @@ class VanillaEncoder(nn.Module):
             
             # Concatenate all scale features
             combined = torch.cat(fused_features, dim=1)  # [B, sum(dims), 1, 1]
-            latent = self.feature_fusion(combined)
+            flattened = self.feature_fusion(combined)
             
-            # Return latent and multi-scale features
-            return latent, features_dict
+            # VAE latent parameters
+            mu = self.fc_mu(flattened)
+            log_var = self.fc_log_var(flattened)
+            
+            # Return mu, log_var and multi-scale features
+            return mu, log_var, features_dict
             
         else:
             # 기존 Conv-based 방식 (backbone=None)
             features = self.conv_blocks(x)
             pooled = self.pool(features)
             pooled = pooled.view(pooled.size(0), -1)
-            latent = self.fc(pooled)
-            return latent, features
+            
+            # VAE latent parameters
+            mu = self.fc_mu(pooled)
+            log_var = self.fc_log_var(pooled)
+            
+            return mu, log_var, features
 
 
-class VanillaDecoder(nn.Module):
+class VanillaVAEDecoder(nn.Module):
     def __init__(self, out_channels=3, latent_dim=512, img_size=256):
         super().__init__()
         self.img_size = img_size
 
-        # Safety check for encoder's downsampling factor (5 ConvBlocks with stride=2 -> /32)
+        # Safety check for encoder's downsampling factor
         if self.img_size % 32 != 0:
             raise ValueError(f"img_size must be divisible by 32, got {self.img_size}")
 
-        self.start_size = self.img_size // 32  # Encoder downsampling factor (5 conv blocks)
+        self.start_size = self.img_size // 32
 
         self.fc = nn.Linear(latent_dim, 512 * self.start_size * self.start_size)
         self.unflatten = nn.Unflatten(1, (512, self.start_size, self.start_size))
@@ -108,18 +118,19 @@ class VanillaDecoder(nn.Module):
         return reconstructed
 
 
-class VanillaAE(BaseModel):
-    """Vanilla AutoEncoder with optional TimmFeatureExtractor backbone."""
+class VanillaVAE(BaseModel):
+    """Vanilla Variational AutoEncoder with optional TimmFeatureExtractor backbone."""
     
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256,
-                 backbone=None, layers=None):
+                 backbone=None, layers=None, beta=1.0):
         super().__init__()
         
         self.backbone = backbone
         self.layers = layers
+        self.beta = beta  # KL divergence weight
         
         # Encoder with optional backbone (None이면 기존 방식)
-        self.encoder = VanillaEncoder(
+        self.encoder = VanillaVAEEncoder(
             in_channels=in_channels, 
             latent_dim=latent_dim,
             backbone=backbone,
@@ -127,8 +138,14 @@ class VanillaAE(BaseModel):
         )
         
         # Decoder는 항상 동일 (backbone 무관)
-        self.decoder = VanillaDecoder(out_channels, latent_dim, img_size)
-        self.model_type = "vanilla_ae"
+        self.decoder = VanillaVAEDecoder(out_channels, latent_dim, img_size)
+        self.model_type = "vanilla_vae"
+
+    def reparameterize(self, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+        """Reparameterization trick for VAE."""
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
     def compute_anomaly_map(self, original: torch.Tensor, reconstructed: torch.Tensor) -> torch.Tensor:
         """Compute pixel-level reconstruction error map."""
@@ -142,27 +159,30 @@ class VanillaAE(BaseModel):
 
     def forward(self, images):
         """Forward pass with conditional backbone support."""
-        latent, features = self.encoder(images)
-        reconstructed = self.decoder(latent)
-
+        mu, log_var, features = self.encoder(images)
+        
         if self.training:
-            return reconstructed, latent, features
-        
-        # Inference mode
-        anomaly_map = self.compute_anomaly_map(images, reconstructed)
-        pred_score = self.compute_anomaly_score(anomaly_map)
-        
-        return {
-            'pred_score': pred_score,
-            'anomaly_map': anomaly_map
-        }
+            # Training mode: return VAE outputs for loss calculation
+            latent = self.reparameterize(mu, log_var)
+            reconstructed = self.decoder(latent)
+            return reconstructed, mu, log_var, features
+        else:
+            # Inference mode: use mean for deterministic output
+            reconstructed = self.decoder(mu)
+            anomaly_map = self.compute_anomaly_map(images, reconstructed)
+            pred_score = self.compute_anomaly_score(anomaly_map)
+            
+            return {
+                'pred_score': pred_score,
+                'anomaly_map': anomaly_map
+            }
 
 
 # =============================================================================
-# Unet-style AutoEncoder with Backbones
+# U-Net Variational AutoEncoder  
 # =============================================================================
 
-class UNetEncoder(nn.Module):
+class UNetVAEEncoder(nn.Module):
     def __init__(self, in_channels=3, latent_dim=512, backbone=None, layers=None):
         super().__init__()
         
@@ -179,13 +199,14 @@ class UNetEncoder(nn.Module):
             # Feature dimensions
             self.feature_dims = self.backbone_extractor.out_dims
             
-            # Latent projection from deepest features
-            deepest_dim = self.feature_dims[-1]  # 가장 깊은 layer의 차원
+            # VAE latent projection from deepest features
+            deepest_dim = self.feature_dims[-1]
             self.latent_projection = nn.Sequential(
                 nn.AdaptiveAvgPool2d((1, 1)),
                 nn.Flatten(),
-                nn.Linear(deepest_dim, latent_dim)
             )
+            self.fc_mu = nn.Linear(deepest_dim, latent_dim)
+            self.fc_log_var = nn.Linear(deepest_dim, latent_dim)
             
         else:
             # 기존 Conv-based encoder (backbone=None인 경우)
@@ -197,7 +218,8 @@ class UNetEncoder(nn.Module):
             self.conv5 = ConvBlock(256, 512)
             
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
-            self.fc = nn.Linear(512, latent_dim)
+            self.fc_mu = nn.Linear(512, latent_dim)
+            self.fc_log_var = nn.Linear(512, latent_dim)
 
     def forward(self, x):
         if self.use_backbone:
@@ -209,11 +231,14 @@ class UNetEncoder(nn.Module):
             for layer_name in self.backbone_extractor.layers[:-1]:  # 마지막 제외
                 skip_connections.append(features_dict[layer_name])
             
-            # Latent from deepest features
+            # VAE latent from deepest features
             deepest_features = features_dict[self.backbone_extractor.layers[-1]]
-            latent = self.latent_projection(deepest_features)
+            flattened = self.latent_projection(deepest_features)
             
-            return latent, deepest_features, skip_connections
+            mu = self.fc_mu(flattened)
+            log_var = self.fc_log_var(flattened)
+            
+            return mu, log_var, deepest_features, skip_connections
             
         else:
             # 기존 Conv-based U-Net encoder (backbone=None)
@@ -224,13 +249,15 @@ class UNetEncoder(nn.Module):
             e5 = self.conv5(e4)     # 512,H/32, W/32
 
             pooled = self.pool(e5).view(x.size(0), -1)
-            latent = self.fc(pooled)
+            
+            mu = self.fc_mu(pooled)
+            log_var = self.fc_log_var(pooled)
 
             skip_connections = [e1, e2, e3, e4]
-            return latent, e5, skip_connections
+            return mu, log_var, e5, skip_connections
 
 
-class UNetDecoder(nn.Module):
+class UNetVAEDecoder(nn.Module):
     def __init__(self, out_channels=3, latent_dim=512, img_size=256, 
                  backbone_dims=None):
         super().__init__()
@@ -316,18 +343,19 @@ class UNetDecoder(nn.Module):
         return reconstructed
 
 
-class UNetAE(BaseModel):
-    """U-Net AutoEncoder with optional TimmFeatureExtractor backbone."""
+class UNetVAE(BaseModel):
+    """U-Net Variational AutoEncoder with optional TimmFeatureExtractor backbone."""
     
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256,
-                 backbone=None, layers=None):
+                 backbone=None, layers=None, beta=1.0):
         super().__init__()
         
         self.backbone = backbone
         self.layers = layers
+        self.beta = beta  # KL divergence weight
         
         # Encoder with optional backbone (None이면 기존 방식)
-        self.encoder = UNetEncoder(
+        self.encoder = UNetVAEEncoder(
             in_channels=in_channels,
             latent_dim=latent_dim,
             backbone=backbone,
@@ -341,12 +369,18 @@ class UNetAE(BaseModel):
             temp_extractor = TimmFeatureExtractor(backbone=backbone, layers=layers, pre_trained=False)
             backbone_dims = temp_extractor.out_dims
             
-        self.decoder = UNetDecoder(
+        self.decoder = UNetVAEDecoder(
             out_channels=out_channels,
             latent_dim=latent_dim,
             img_size=img_size,
             backbone_dims=backbone_dims
         )
+
+    def reparameterize(self, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+        """Reparameterization trick for VAE."""
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
     def compute_anomaly_map(self, original: torch.Tensor, reconstructed: torch.Tensor) -> torch.Tensor:
         """Compute pixel-level reconstruction error map."""
@@ -360,30 +394,119 @@ class UNetAE(BaseModel):
 
     def forward(self, images):
         """Forward pass with conditional backbone support."""
-        latent, features, skip_connections = self.encoder(images)
-        reconstructed = self.decoder(latent, skip_connections)
-
+        mu, log_var, features, skip_connections = self.encoder(images)
+        
         if self.training:
-            return reconstructed, latent, features
+            # Training mode: return VAE outputs for loss calculation
+            latent = self.reparameterize(mu, log_var)
+            reconstructed = self.decoder(latent, skip_connections)
+            return reconstructed, mu, log_var, features
+        else:
+            # Inference mode: use mean for deterministic output
+            reconstructed = self.decoder(mu, skip_connections)
+            anomaly_map = self.compute_anomaly_map(images, reconstructed)
+            pred_score = self.compute_anomaly_score(anomaly_map)
+            
+            return {
+                'pred_score': pred_score,
+                'anomaly_map': anomaly_map
+            }
 
-        # Inference mode
-        anomaly_map = self.compute_anomaly_map(images, reconstructed)
-        pred_score = self.compute_anomaly_score(anomaly_map)
+
+# =============================================================================
+# VAE Loss Function
+# =============================================================================
+
+class VAELoss(nn.Module):
+    """VAE Loss with reconstruction and KL divergence terms."""
+    
+    def __init__(self, beta=1.0, reduction='mean'):
+        super().__init__()
+        self.beta = beta  # KL divergence weight
+        self.reduction = reduction
+
+    def forward(self, reconstructed, original, mu, log_var):
+        """Compute VAE loss = Reconstruction Loss + β * KL Divergence.
+        
+        Args:
+            reconstructed: Reconstructed images [B, C, H, W]
+            original: Original images [B, C, H, W]
+            mu: Mean of latent distribution [B, latent_dim]
+            log_var: Log variance of latent distribution [B, latent_dim]
+            
+        Returns:
+            dict: Loss components and total loss
+        """
+        # Reconstruction loss (MSE)
+        recon_loss = F.mse_loss(reconstructed, original, reduction=self.reduction)
+        
+        # KL divergence loss
+        # KL(q(z|x) || p(z)) where p(z) = N(0,I)
+        kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=1)
+        
+        if self.reduction == 'mean':
+            kl_loss = torch.mean(kl_loss)
+        elif self.reduction == 'sum':
+            kl_loss = torch.sum(kl_loss)
+        
+        # Total VAE loss
+        total_loss = recon_loss + self.beta * kl_loss
         
         return {
-            'pred_score': pred_score,
-            'anomaly_map': anomaly_map
+            'total_loss': total_loss,
+            'recon_loss': recon_loss,
+            'kl_loss': kl_loss
         }
 
 
-class AELoss(nn.Module):
-    def __init__(self, reduction='mean'):
-        super().__init__()
-        self.reduction = reduction
-
-    def forward(self, reconstructed, original):
-        return F.mse_loss(reconstructed, original, reduction=self.reduction)
-
-
 if __name__ == "__main__":
-    pass
+    # Test VAE models
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Test VanillaVAE
+    vanilla_vae = VanillaVAE(latent_dim=128, img_size=256).to(device)
+    
+    # Test UNetVAE with backbone
+    unet_vae = UNetVAE(
+        latent_dim=128, 
+        img_size=256,
+        backbone="resnet18",
+        layers=["layer1", "layer2", "layer3", "layer4"]
+    ).to(device)
+    
+    # Test input
+    x = torch.randn(2, 3, 256, 256).to(device)
+    
+    # Training mode
+    vanilla_vae.train()
+    unet_vae.train()
+    
+    print("VanillaVAE training output:")
+    recon, mu, log_var, features = vanilla_vae(x)
+    print(f"Reconstructed: {recon.shape}, Mu: {mu.shape}, Log_var: {log_var.shape}")
+    
+    print("\nUNetVAE training output:")
+    recon, mu, log_var, features = unet_vae(x)
+    print(f"Reconstructed: {recon.shape}, Mu: {mu.shape}, Log_var: {log_var.shape}")
+    
+    # Inference mode
+    vanilla_vae.eval()
+    unet_vae.eval()
+    
+    print("\nVanillaVAE inference output:")
+    output = vanilla_vae(x)
+    print(f"Pred score: {output['pred_score'].shape}, Anomaly map: {output['anomaly_map'].shape}")
+    
+    print("\nUNetVAE inference output:")
+    output = unet_vae(x)
+    print(f"Pred score: {output['pred_score'].shape}, Anomaly map: {output['anomaly_map'].shape}")
+    
+    # Test VAE loss
+    vanilla_vae.train()
+    recon, mu, log_var, features = vanilla_vae(x)
+    
+    vae_loss = VAELoss(beta=1.0)
+    loss_dict = vae_loss(recon, x, mu, log_var)
+    print(f"\nVAE Loss - Total: {loss_dict['total_loss']:.4f}, Recon: {loss_dict['recon_loss']:.4f}, KL: {loss_dict['kl_loss']:.4f}")
+    
+    print("\nVAE models created successfully!")

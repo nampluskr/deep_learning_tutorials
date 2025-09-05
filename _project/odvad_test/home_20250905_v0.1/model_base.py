@@ -1,3 +1,4 @@
+
 import logging
 import torch
 import torch.nn as nn
@@ -6,7 +7,7 @@ from collections import OrderedDict
 from collections.abc import Sequence
 import timm
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Any
 
 try:
@@ -34,7 +35,7 @@ BACKBONE_WEIGHT_FILES = {
     "wide_resnet50_2": "wide_resnet50_2-95faca4d.pth",
     "efficientnet_b0": "efficientnet_b0_ra-3dd342df.pth",
     "vgg16": "vgg16-397923af.pth",
-    "alexnet": "alexnet-owt-7be5be79.pth", 
+    "alexnet": "alexnet-owt-7be5be79.pth",
     "squeezenet1_1": "squeezenet1_1-b8a52dc0.pth",
 }
 
@@ -64,6 +65,69 @@ def dryrun_find_featuremap_dims(feature_extractor, input_size, layers):
         }
         for layer in layers
     }
+
+# ===================================================================
+# Convolutional Blocks
+# ===================================================================
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1):
+        super().__init__()
+        self.conv_block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+
+    def forward(self, x):
+        return self.conv_block(x)
+
+
+class DeconvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1):
+        super().__init__()
+        self.deconv_block = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x):
+        return self.deconv_block(x)
+
+
+# ===================================================================
+# Base Model
+# ===================================================================
+
+class BaseModel(nn.Module, ABC):
+    """Base model for anomaly detection with standardized compute methods."""
+
+    @abstractmethod
+    def compute_anomaly_map(self, *args, **kwargs) -> torch.Tensor:
+        """Model-specific anomaly map computation.
+
+        Parameters vary by model type:
+        - AE: compute_anomaly_map(original, reconstructed)
+        - STFPM: compute_anomaly_map(teacher_features, student_features, image_size)
+        - Flow: compute_anomaly_map(log_prob, output_size)
+        - DRAEM: compute_anomaly_map(original, reconstructed, discriminator_features)
+
+        Returns: [B, 1, H, W] anomaly map
+        """
+
+    def compute_anomaly_score(self, anomaly_map: torch.Tensor) -> torch.Tensor:
+        """Default max pooling implementation (can be overridden)."""
+        return torch.amax(anomaly_map, dim=(-2, -1))
+
+    @abstractmethod
+    def forward(self, inputs):
+        """Training/inference mode handling.
+
+        Returns:
+        - training=True: Model-specific outputs (tuple/dict)
+        - training=False: {'pred_score': tensor, 'anomaly_map': tensor}
+        """
 
 
 class TimmFeatureExtractor(nn.Module):

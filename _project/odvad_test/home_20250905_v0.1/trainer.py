@@ -13,8 +13,8 @@ from metrics import AUROCMetric, AUPRMetric, AccuracyMetric, PrecisionMetric
 from metrics import RecallMetric, F1Metric, OptimalThresholdMetric
 
 
-
 def get_logger(output_dir):
+    """Create logger for training progress tracking."""
     os.makedirs(output_dir, exist_ok=True)
     log_file = os.path.join(output_dir, 'experiment.log')
 
@@ -32,6 +32,8 @@ def get_logger(output_dir):
 
 
 class EarlyStopper:
+    """Early stopping handler with best weights restoration."""
+
     def __init__(self, patience=5, min_delta=1e-4, restore_best_weights=True):
         self.patience = patience
         self.min_delta = min_delta
@@ -56,12 +58,11 @@ class EarlyStopper:
         return False
 
 
-# ===================================================================
-# Base Trainer
-# ===================================================================
-
 class BaseTrainer(ABC):
+    """Base trainer with separated epoch methods for different model paradigms."""
+
     def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        """Initialize trainer with modeler and training components."""
         self.modeler = modeler
         self.model = modeler.model
         self.metrics = modeler.metrics
@@ -71,12 +72,194 @@ class BaseTrainer(ABC):
         self.logger = logger
         self.metric_names = self.modeler.get_metric_names()
 
-    def log(self, message, level='info'):
-        if self.logger:
-            getattr(self.logger, level, self.logger.info)(message)
-        print(message)
+    def fit(self, train_loader, num_epochs, valid_loader=None):
+        """Complete training loop with validation."""
+        history = {'loss': []}
+        history.update({name: [] for name in self.metric_names})
+        if valid_loader is not None:
+            history.update({f"val_{name}": [] for name in ['loss'] + list(self.metric_names)})
 
-    def update_learning_rate(self, epoch, train_results, valid_results):
+        self.log("\n > Training started...")
+        for epoch in range(1, num_epochs + 1):
+            start_time = time()
+
+            # === Training Phase ===
+            self.model.train()
+            train_results = self.train_epoch(train_loader, epoch, num_epochs)
+
+            # Store training results
+            for key, value in train_results.items():
+                if key in history:
+                    history[key].append(value)
+
+            # === Validation Phase ===
+            valid_results = {}
+            if valid_loader is not None:
+                self.model.train()  # Keep training mode for validation monitoring
+                valid_results = self.validation_epoch(valid_loader)
+
+                # Store validation results
+                for key, value in valid_results.items():
+                    val_key = f"val_{key}"
+                    if val_key in history:
+                        history[val_key].append(value)
+
+            # Logging
+            train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items()])
+            if valid_results:
+                valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
+                elapsed_time = time() - start_time
+                self.log(f" [{epoch:2d}/{num_epochs}] {train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
+            else:
+                elapsed_time = time() - start_time
+                self.log(f" [{epoch:2d}/{num_epochs}] {train_info} ({elapsed_time:.1f}s)")
+
+            # Learning rate scheduling and early stopping
+            self.check_learning_rate(epoch, train_results, valid_results)
+            if self.check_early_stop(epoch, train_results, valid_results):
+                break
+
+        self.log(" > Training completed!")
+        return history
+
+    def predict(self, test_loader):
+        """Deployment-optimized inference."""
+        self.model.eval()
+        return self.predict_epoch(test_loader)
+
+    def test(self, test_loader, threshold_method="f1"):
+        """Academic evaluation with comprehensive metrics."""
+        self.model.eval()
+        predictions = self.test_epoch(test_loader)
+
+        scores = predictions['pred_scores']
+        labels = predictions['gt_labels']
+
+        # Calculate evaluation metrics
+        results = {}
+        results["auroc"] = AUROCMetric()(labels, scores)
+        results["aupr"] = AUPRMetric()(labels, scores)
+
+        threshold = OptimalThresholdMetric(method=threshold_method)(labels, scores)
+        results["threshold"] = threshold
+
+        binary_predictions = (scores >= threshold).float()
+        results["accuracy"] = AccuracyMetric()(labels, binary_predictions)
+        results["precision"] = PrecisionMetric()(labels, binary_predictions)
+        results["recall"] = RecallMetric()(labels, binary_predictions)
+        results["f1"] = F1Metric()(labels, binary_predictions)
+
+        return results
+
+    # ===================================================================
+    # Separated Epoch Methods
+    # ===================================================================
+
+    @abstractmethod
+    def train_epoch(self, train_loader, epoch, num_epochs):
+        """Paradigm-specific training logic."""
+        pass
+
+    def validation_epoch(self, data_loader):
+        """Validation epoch for training monitoring."""
+        total_loss = 0.0
+        total_metrics = {name: 0.0 for name in self.metric_names}
+        num_batches = 0
+
+        with torch.no_grad():
+            desc = "Validation"
+            with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
+                for inputs in pbar:
+                    # Use validation_step for training mode outputs + loss calculation
+                    batch_results = self.modeler.validation_step(inputs)
+
+                    total_loss += batch_results['loss']
+                    for metric_name in self.metric_names:
+                        if metric_name in batch_results:
+                            total_metrics[metric_name] += batch_results[metric_name]
+
+                    num_batches += 1
+                    avg_loss = total_loss / num_batches
+                    avg_metrics = {name: total_metrics[name] / num_batches
+                                 for name in self.metric_names}
+
+                    pbar.set_postfix({'loss': f"{avg_loss:.3f}",
+                        **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
+
+        # Return validation results for monitoring
+        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
+        results.update({name: total_metrics[name] / num_batches
+                       for name in self.metric_names})
+        return results
+
+    def predict_epoch(self, data_loader):
+        """Prediction epoch for deployment scenarios."""
+        all_pred_scores = []
+        all_anomaly_maps = []
+
+        with torch.no_grad():
+            desc = "Predict"
+            with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
+                for inputs in pbar:
+                    # Use predict_step for eval mode outputs
+                    batch_results = self.modeler.predict_step(inputs)
+
+                    all_pred_scores.append(batch_results['pred_scores'].cpu())
+                    if 'anomaly_maps' in batch_results:
+                        all_anomaly_maps.append(batch_results['anomaly_maps'].cpu())
+
+                    pbar.set_postfix({'samples': len(all_pred_scores)})
+
+        # Return prediction results for deployment
+        results = {
+            'pred_scores': torch.cat(all_pred_scores, dim=0)
+        }
+
+        if all_anomaly_maps:
+            results['anomaly_maps'] = torch.cat(all_anomaly_maps, dim=0)
+
+        return results
+
+    def test_epoch(self, data_loader):
+        """Test epoch for academic evaluation."""
+        all_pred_scores = []
+        all_anomaly_maps = []
+        all_gt_labels = []
+
+        with torch.no_grad():
+            desc = "Test"
+            with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
+                for inputs in pbar:
+                    # Use test_step for eval mode outputs
+                    batch_results = self.modeler.test_step(inputs)
+
+                    all_pred_scores.append(batch_results['pred_scores'].cpu())
+                    if 'anomaly_maps' in batch_results:
+                        all_anomaly_maps.append(batch_results['anomaly_maps'].cpu())
+
+                    # Collect ground truth labels for evaluation
+                    if 'label' in inputs:
+                        all_gt_labels.append(inputs['label'].cpu())
+
+                    pbar.set_postfix({'samples': len(all_pred_scores)})
+
+        # Return test results for evaluation
+        results = {
+            'pred_scores': torch.cat(all_pred_scores, dim=0),
+            'gt_labels': torch.cat(all_gt_labels, dim=0) if all_gt_labels else None
+        }
+
+        if all_anomaly_maps:
+            results['anomaly_maps'] = torch.cat(all_anomaly_maps, dim=0)
+
+        return results
+
+    # ===================================================================
+    # Helper Methods
+    # ===================================================================
+
+    def check_learning_rate(self, epoch, train_results, valid_results):
+        """Check and update learning rate based on scheduler."""
         if self.scheduler is not None:
             last_lr = self.optimizer.param_groups[0]['lr']
             if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
@@ -89,7 +272,8 @@ class BaseTrainer(ABC):
             if abs(current_lr - last_lr) > 1e-12:
                 self.log(f" > learning rate changed: {last_lr:.3e} => {current_lr:.3e}")
 
-    def check_stopping_condition(self, epoch, train_results, valid_results):
+    def check_early_stop(self, epoch, train_results, valid_results):
+        """Check early stopping condition based on validation performance."""
         if self.stopper is not None:
             current_loss = valid_results.get('loss', train_results['loss'])
 
@@ -105,138 +289,163 @@ class BaseTrainer(ABC):
                 return True
         return False
 
-    @torch.no_grad()
-    def predict(self, test_loader):
-        self.model.eval()
-        all_scores, all_labels = [], []
-
-        desc = "Predict"
-        with tqdm(test_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                scores = self.modeler.predict_step(inputs)
-                labels = inputs["label"]
-
-                all_scores.append(scores.cpu())
-                all_labels.append(labels.cpu())
-
-        scores_tensor = torch.cat(all_scores, dim=0)
-        labels_tensor = torch.cat(all_labels, dim=0)
-        return scores_tensor, labels_tensor
-
-    @torch.no_grad()
-    def evaluate(self, test_loader, threshold_method="f1"):
-        scores, labels = self.predict(test_loader)
-
-        results = {}
-        results["auroc"] = AUROCMetric()(labels, scores)
-        results["aupr"] = AUPRMetric()(labels, scores)
-
-        threshold = OptimalThresholdMetric(method=threshold_method)(labels, scores)
-        results["threshold"] = threshold
-
-        predictions = (scores >= threshold).float()
-        results["accuracy"] = AccuracyMetric()(labels, predictions)
-        results["precision"] = PrecisionMetric()(labels, predictions)
-        results["recall"] = RecallMetric()(labels, predictions)
-        results["f1"] = F1Metric()(labels, predictions)
-        return results
-
     def save_model(self, path):
+        """Save model state to disk."""
         if hasattr(self.modeler, 'save_model'):
             self.modeler.save_model(path)
         else:
             torch.save(self.model.state_dict(), path)
 
     def load_model(self, path):
+        """Load model state from disk."""
         if hasattr(self.modeler, 'load_model'):
             self.modeler.load_model(path)
         else:
             state_dict = torch.load(path, map_location=self.modeler.device)
             self.model.load_state_dict(state_dict)
 
-    @abstractmethod
-    def fit(self, train_loader, num_epochs=None, valid_loader=None):
-        pass
-
-    @abstractmethod
-    def run_epoch(self, data_loader, epoch, num_epochs, mode):
-        pass
+    def log(self, message, level='info'):
+        """Log training progress and information."""
+        if self.logger:
+            getattr(self.logger, level, self.logger.info)(message)
+        print(message)
 
 
 # ===================================================================
-# Gradient Trainer: AEModeler / STFPMModeler
+# Paradigm-Specific Trainers
 # ===================================================================
 
-class GradientTrainer(BaseTrainer):
-    """Trainer for gradient-based anomaly detection models (AE, STFPM, DRAEM, DFM)"""
+class ReconstructionTrainer(BaseTrainer):
+    """Trainer for reconstruction-based anomaly detection models."""
     
-    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
-        super().__init__(modeler, optimizer, scheduler, stopper, logger)
-
-    def fit(self, train_loader, num_epochs, valid_loader=None):
-        history = {'loss': []}
-        history.update({name: [] for name in self.metric_names})
-        if valid_loader is not None:
-            history.update({f"val_{name}": [] for name in ['loss'] + list(self.metric_names)})
-
-        self.log("\n > Training started...")
-        for epoch in range(1, num_epochs + 1):
-            start_time = time()
-            train_results = self.run_epoch(train_loader, epoch, num_epochs, mode='train')
-            train_info = ", ".join([f'{key}={value:.3f}' for key, value in train_results.items()])
-
-            for key, value in train_results.items():
-                if key in history:
-                    history[key].append(value)
-
-            valid_results = {}
-            if valid_loader is not None:
-                valid_results = self.run_epoch(valid_loader, epoch, num_epochs, mode='valid')
-                valid_info = ", ".join([f'{key}={value:.3f}' for key, value in valid_results.items()])
-
-                for key, value in valid_results.items():
-                    val_key = f"val_{key}"
-                    if val_key in history:
-                        history[val_key].append(value)
-
-                elapsed_time = time() - start_time
-                self.log(f" [{epoch:2d}/{num_epochs}] {train_info} | (val) {valid_info} ({elapsed_time:.1f}s)")
-            else:
-                elapsed_time = time() - start_time
-                self.log(f" [{epoch:2d}/{num_epochs}] {train_info} ({elapsed_time:.1f}s)")
-
-            self.update_learning_rate(epoch, train_results, valid_results)
-            if self.check_stopping_condition(epoch, train_results, valid_results):
-                break
-
-        self.log(" > Training completed!")
-        return history
-
-    def run_epoch(self, data_loader, epoch, num_epochs, mode):
-        num_batches = 0
+    def train_epoch(self, train_loader, epoch, num_epochs):
+        """Training epoch with reconstruction loss optimization."""
         total_loss = 0.0
         total_metrics = {name: 0.0 for name in self.metric_names}
+        num_batches = 0
 
-        desc = f"{mode.capitalize()} [{epoch}/{num_epochs}]"
-        with tqdm(data_loader, desc=desc, leave=False, ascii=True) as pbar:
+        desc = f"Train [{epoch}/{num_epochs}]"
+        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
             for inputs in pbar:
-                if mode == 'train':
-                    batch_results = self.modeler.train_step(inputs, self.optimizer)
-                else:
-                    batch_results = self.modeler.validate_step(inputs)
-
+                # Reconstruction-specific training step
+                batch_results = self.modeler.train_step(inputs, self.optimizer)
+                
                 total_loss += batch_results['loss']
-                for metric_name in self.modeler.metrics.keys():
+                for metric_name in self.metric_names:
                     if metric_name in batch_results:
                         total_metrics[metric_name] += batch_results[metric_name]
                 
                 num_batches += 1
                 avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches for name in self.metric_names}
-
+                avg_metrics = {name: total_metrics[name] / num_batches 
+                             for name in self.metric_names}
+                
                 pbar.set_postfix({'loss': f"{avg_loss:.3f}",
                     **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
 
         results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches for name in self.metric_names})
+        results.update({name: total_metrics[name] / num_batches 
+                       for name in self.metric_names})
+        return results
+
+
+class DistillationTrainer(BaseTrainer):
+    """Trainer for distillation-based anomaly detection models."""
+    
+    def train_epoch(self, train_loader, epoch, num_epochs):
+        """Training epoch with feature distillation loss optimization."""
+        total_loss = 0.0
+        total_metrics = {name: 0.0 for name in self.metric_names}
+        num_batches = 0
+
+        desc = f"Train [{epoch}/{num_epochs}]"
+        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                # Distillation-specific training step
+                batch_results = self.modeler.train_step(inputs, self.optimizer)
+                
+                total_loss += batch_results['loss']
+                for metric_name in self.metric_names:
+                    if metric_name in batch_results:
+                        total_metrics[metric_name] += batch_results[metric_name]
+                
+                num_batches += 1
+                avg_loss = total_loss / num_batches
+                avg_metrics = {name: total_metrics[name] / num_batches 
+                             for name in self.metric_names}
+                
+                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
+                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
+
+        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
+        results.update({name: total_metrics[name] / num_batches 
+                       for name in self.metric_names})
+        return results
+
+
+class FlowTrainer(BaseTrainer):
+    """Trainer for normalizing flow-based anomaly detection models."""
+    
+    def train_epoch(self, train_loader, epoch, num_epochs):
+        """Training epoch with likelihood maximization optimization."""
+        total_loss = 0.0
+        total_metrics = {name: 0.0 for name in self.metric_names}
+        num_batches = 0
+
+        desc = f"Train [{epoch}/{num_epochs}]"
+        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                # Flow-specific training step
+                batch_results = self.modeler.train_step(inputs, self.optimizer)
+                
+                total_loss += batch_results['loss']
+                for metric_name in self.metric_names:
+                    if metric_name in batch_results:
+                        total_metrics[metric_name] += batch_results[metric_name]
+                
+                num_batches += 1
+                avg_loss = total_loss / num_batches
+                avg_metrics = {name: total_metrics[name] / num_batches 
+                             for name in self.metric_names}
+                
+                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
+                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
+
+        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
+        results.update({name: total_metrics[name] / num_batches 
+                       for name in self.metric_names})
+        return results
+
+
+class MemoryTrainer(BaseTrainer):
+    """Trainer for memory-based anomaly detection models."""
+    
+    def train_epoch(self, train_loader, epoch, num_epochs):
+        """Training epoch for memory bank construction."""
+        total_loss = 0.0
+        total_metrics = {name: 0.0 for name in self.metric_names}
+        num_batches = 0
+
+        desc = f"Memory [{epoch}/{num_epochs}]"
+        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                # Memory-specific training step (feature extraction)
+                batch_results = self.modeler.train_step(inputs, self.optimizer)
+                
+                total_loss += batch_results.get('loss', 0.0)
+                for metric_name in self.metric_names:
+                    if metric_name in batch_results:
+                        total_metrics[metric_name] += batch_results[metric_name]
+                
+                num_batches += 1
+                avg_loss = total_loss / num_batches
+                avg_metrics = {name: total_metrics[name] / num_batches 
+                             for name in self.metric_names}
+                
+                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
+                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
+
+        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
+        results.update({name: total_metrics[name] / num_batches 
+                       for name in self.metric_names})
         return results
