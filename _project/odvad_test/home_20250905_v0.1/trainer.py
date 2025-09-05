@@ -13,17 +13,18 @@ from metrics import AUROCMetric, AUPRMetric, AccuracyMetric, PrecisionMetric
 from metrics import RecallMetric, F1Metric, OptimalThresholdMetric
 
 
-def get_logger(output_dir):
+def get_logger(output_dir, log_name='experiment.log'):
     """Create logger for training progress tracking."""
     os.makedirs(output_dir, exist_ok=True)
-    log_file = os.path.join(output_dir, 'experiment.log')
+    log_file = os.path.join(output_dir, log_name)
 
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
 
     file_handler = logging.FileHandler(log_file)
-    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', 
+        datefmt='%Y-%m-%d %H:%M:%S')
     file_handler.setFormatter(file_formatter)
 
     logger.addHandler(file_handler)

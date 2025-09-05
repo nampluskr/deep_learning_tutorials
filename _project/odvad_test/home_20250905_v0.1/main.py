@@ -2,6 +2,7 @@ import os
 import random
 import numpy as np
 import torch
+from datetime import datetime
 
 # ===================================================================
 # Configs
@@ -12,6 +13,7 @@ from types import SimpleNamespace
 BASE_CONFIGS = SimpleNamespace(
     backbone_dir="/mnt/d/backbones",
     output_dir="./experiments",
+    log_name="experiment.log",
     num_epochs=10,
     seed=42,
     verbose=True,
@@ -154,16 +156,9 @@ def build_config(data_type, model_type):
 
     trainer_type = model_config.trainer_type
     config = merge_configs(config, TRAIN_CONFIGS[trainer_type])
-
-    if model_type in ["patchcore", "padim"]:    # memory-based models
-        config.num_epochs = 1
-        config.dataloader_params["train_batch_size"] = 4
-        config.dataloader_params["test_batch_size"] = 2
-        config.dataloader_params["valid_ratio"] = 0.0
-        config.dataloader_params["train_shuffle"] = False
-        config.dataloader_params["test_shuffle"] = False
-        config.dataloader_params["train_drop_last"] = False
-        config.dataloader_params["test_drop_last"] = False
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    config.output_dir = os.path.join(config.output_dir, f"{timestamp}_{data_type.lower()}_{model_type.lower()}")
     return config
 
 
@@ -475,7 +470,7 @@ def run_experiment(config):
         set_seed(config.seed)
         set_backbone_dir(config.backbone_dir)
 
-        logger = get_logger(config.output_dir)
+        logger = get_logger(config.output_dir, log_name=config.log_name)
         show_header(config, logger=logger)
 
         ## 1. Data loaders
@@ -567,8 +562,7 @@ def count_labels(dataset):
 def show_header(config, logger=None):
     """Show experiment header information."""
     header_line = "\n" + "="*60
-    exp_line = f"RUN EXPERIMENT: {config.dataloader_type.upper()} - " \
-               f"{config.model_type.upper()} - {config.trainer_type.upper()} Trainer"
+    exp_line = f"RUN EXPERIMENT: {config.dataloader_type.upper()} - {config.model_type.upper()}"
     footer_line = "="*60
     
     # Console output with newline
@@ -704,7 +698,6 @@ def show_gpu_memory(verbose=True, logger=None):
 
 def run(data_type, model_type, categories=[], verbose=False):
     config = build_config(data_type, model_type)
-    config.output_dir += f"_{data_type.lower()}_{model_type.lower()}"
     config.dataloader_params["categories"] = categories
     config.verbose = verbose
     config.show_dataloader=True
