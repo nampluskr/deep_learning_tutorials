@@ -89,13 +89,28 @@ MODEL_CONFIGS = {
         loss_params=dict(),
         metric_list=[("feature_sim", dict(similarity_fn='cosine'))],   # (metric_type, matric_params)
     ),
+    "fastflow": SimpleNamespace(
+        modeler_type="fastflow",
+        trainer_type="reconstruction",
+        
+        model_type="fastflow",
+        model_params=dict(
+            backbone="resnet18", 
+            flow_steps=8, 
+            conv3x3_only=False, 
+            hidden_ratio=1.0
+        ),
+        loss_type="fastflow",
+        loss_params=dict(),
+        metric_list=[("likelihood", dict())],
+    ),
 }
 
 TRAIN_CONFIGS = {
     "reconstruction": SimpleNamespace(
         trainer_type="reconstruction",
         optimizer_type="adamw",
-        optimizer_params=dict(lr=1e-4, weight_decay=1e-5),
+        optimizer_params=dict(lr=1e-5, weight_decay=1e-5),
         scheduler_type="plateau",
         scheduler_params=dict(),
         stopper_type="early",
@@ -165,6 +180,7 @@ import torch.nn as nn
 from model_ae import VanillaAE, UNetAE, AELoss
 from model_vae import VanillaVAE, UNetVAE, VAELoss
 from model_stfpm import STFPMModel, STFPMLoss
+from model_fastflow import FastFlowModel, FastFlowLoss
 
 MODEL_REGISTRY = {
     "vanilla_ae": VanillaAE,
@@ -172,12 +188,14 @@ MODEL_REGISTRY = {
     "vanilla_vae": VanillaVAE,
     "unet_vae": UNetVAE,
     "stfpm": STFPMModel,
+    "fastflow": FastFlowModel,
 }
 
 LOSS_REGISTRY = {
     "ae": AELoss,
     "vae": VAELoss,
     "stfpm": STFPMLoss,
+    "fastflow": FastFlowLoss,
 }
 
 # ===================================================================
@@ -187,6 +205,7 @@ LOSS_REGISTRY = {
 from metrics import AUROCMetric, AUPRMetric, AccuracyMetric, PrecisionMetric
 from metrics import RecallMetric, F1Metric, OptimalThresholdMetric
 from metrics import PSNRMetric, FeatureSimilarityMetric
+from metrics import LikelihoodMetric
 
 METRIC_REGISTRY = {
     "auroc": AUROCMetric,
@@ -198,6 +217,7 @@ METRIC_REGISTRY = {
     "thershold": OptimalThresholdMetric,
     "psnr": PSNRMetric,
     "feature_sim": FeatureSimilarityMetric,
+    "likelihood": LikelihoodMetric
 }
 
 
@@ -205,12 +225,13 @@ METRIC_REGISTRY = {
 # Modelers
 # ===================================================================
 
-from modeler import AEModeler, VAEModeler, STFPMModeler
+from modeler import AEModeler, VAEModeler, STFPMModeler, FastFlowModeler
 
 MODELER_REGISTRY = {
     "ae": AEModeler,
     "vae": VAEModeler,
     "stfpm": STFPMModeler,
+    "fastflow": FastFlowModeler,
 }
 
 
@@ -601,7 +622,11 @@ def run(data_type, model_type, categories=[], verbose=False):
     config.show_modeler=True
     config.show_trainer=True
     config.show_memory=True
-    config.num_epochs = 5
+    config.num_epochs = 20
+    
+    if model_type in ["fastflow"]:
+        config.optimizer_params=dict(lr=1e-5, weight_decay=1e-5)
+    
     run_experiment(config)
 
 
@@ -622,8 +647,10 @@ def get_device():
 if __name__ == "__main__":
 
     categories=["bottle", "tile"]
-    run("mvtec", "vanilla_ae", categories=categories)
-    run("mvtec", "unet_ae", categories=categories)
-    run("mvtec", "vanilla_vae", categories=categories)
-    run("mvtec", "unet_vae", categories=categories)
-    run("mvtec", "stfpm", categories=categories)
+    # run("mvtec", "vanilla_ae", categories=categories)
+    # run("mvtec", "unet_ae", categories=categories)
+    # run("mvtec", "vanilla_vae", categories=categories)
+    # run("mvtec", "unet_vae", categories=categories)
+    # run("mvtec", "stfpm", categories=categories)
+
+    run("mvtec", "fastflow", categories=categories)

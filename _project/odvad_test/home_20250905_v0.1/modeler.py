@@ -475,5 +475,94 @@ class STFPMModeler(BaseModeler):
             return results
 
 
+# ===================================================================
+# FastFlow Modeler
+# ===================================================================
+
+class FastFlowModeler(BaseModeler):
+    """Modeler for FastFlow normalizing flow-based anomaly detection."""
+    
+    def __init__(self, model, loss_fn=None, metrics=None, device=None):
+        super().__init__(model, loss_fn, metrics, device)
+
+    def train_step(self, inputs, optimizer):
+        """Execute training step with negative log-likelihood optimization."""
+        self.model.train()
+        inputs = self.to_device(inputs)
+
+        optimizer.zero_grad()
+        
+        # Flow training: (hidden_variables, jacobians)
+        hidden_variables, jacobians = self.model(inputs['image'])
+        loss = self.loss_fn(hidden_variables, jacobians)
+        
+        loss.backward()
+        optimizer.step()
+
+        results = {'loss': loss.item()}
+        
+        # Add flow-specific metrics if available
+        with torch.no_grad():
+            for metric_name, metric_fn in self.metrics.items():
+                if metric_name == "likelihood":
+                    total_likelihood = 0
+                    for hidden_var, jacobian in zip(hidden_variables, jacobians):
+                        # FastFlowLoss와 일치하는 계산
+                        neg_log_likelihood = 0.5 * torch.sum(hidden_var**2, dim=(1, 2, 3)) - jacobian
+                        likelihood = -torch.mean(neg_log_likelihood)  # 음의 부호로 likelihood 변환
+                        total_likelihood += likelihood
+                    results[metric_name] = (total_likelihood / len(hidden_variables)).item()
+
+        return results
+
+    def validation_step(self, inputs):
+        """Validation step for flow models."""
+        self.model.train()  # Keep training mode for validation
+        inputs = self.to_device(inputs)
+
+        with torch.no_grad():
+            hidden_variables, jacobians = self.model(inputs['image'])
+            loss = self.loss_fn(hidden_variables, jacobians)
+
+            results = {'loss': loss.item()}
+            
+        for metric_name, metric_fn in self.metrics.items():
+            if metric_name == "likelihood":
+                total_likelihood = 0
+                for hidden_var, jacobian in zip(hidden_variables, jacobians):
+                    # FastFlowLoss와 일치하는 계산
+                    neg_log_likelihood = 0.5 * torch.sum(hidden_var**2, dim=(1, 2, 3)) - jacobian
+                    likelihood = -torch.mean(neg_log_likelihood)  # 음의 부호로 likelihood 변환
+                    total_likelihood += likelihood
+                results[metric_name] = (total_likelihood / len(hidden_variables)).item()
+
+        return results
+
+    def predict_step(self, inputs):
+        """Deployment-optimized prediction step for FastFlow."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            # Inference mode: {'pred_score': ..., 'anomaly_map': ...}
+            predictions = self.model(inputs['image'])
+            return {
+                'pred_scores': predictions['pred_score'],
+                'anomaly_maps': predictions['anomaly_map']
+            }
+
+    def test_step(self, inputs):
+        """Evaluation-focused test step for FastFlow."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            return {
+                'pred_scores': predictions['pred_score'],
+                'anomaly_maps': predictions['anomaly_map'],
+                'gt_labels': inputs['label']
+            }
+
 if __name__ == "__main__":
     pass

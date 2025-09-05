@@ -167,3 +167,22 @@ class FeatureSimilarityMetric(nn.Module):
         
         else:
             raise ValueError(f"Unknown similarity function: {self.similarity_fn}")
+
+
+# ===================================================================
+# Metrics specific to flow-based anomaly detection models
+# ===================================================================
+
+class LikelihoodMetric(nn.Module):
+    """Likelihood metric for flow-based models."""
+    
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, hidden_variables, jacobians):
+        """Compute average likelihood per batch."""
+        total_likelihood = 0
+        for hidden_var, jacobian in zip(hidden_variables, jacobians):
+            likelihood = -0.5 * torch.sum(hidden_var**2, dim=(1, 2, 3)) + jacobian
+            total_likelihood += torch.mean(likelihood)
+        return (total_likelihood / len(hidden_variables)).item()
