@@ -54,8 +54,6 @@ class BaseModeler(ABC):
         """Execute validation step without backpropagation."""
         pass
 
-
-
     @abstractmethod
     def predict_step(self, inputs):
         """Execute deployment-optimized prediction step."""
@@ -172,6 +170,159 @@ class AEModeler(BaseModeler):
                 reconstructed, latent, features = predictions
                 anomaly_maps = torch.mean((inputs['image'] - reconstructed)**2, dim=1, keepdim=True)
                 pred_scores = torch.amax(anomaly_maps, dim=(-2, -1))
+                results = {
+                    'pred_scores': pred_scores,
+                    'anomaly_maps': anomaly_maps,
+                    'gt_labels': inputs['label']
+                }
+                
+        return results
+
+
+# ===================================================================
+# VAE Modeler
+# ===================================================================
+
+class VAEModeler(BaseModeler):
+    """Modeler for variational autoencoder-based anomaly detection models."""
+    
+    def __init__(self, model, loss_fn, metrics=None, device=None):
+        """Initialize VAE modeler with reconstruction and KL divergence components."""
+        super().__init__(model, loss_fn, metrics, device)
+
+    def train_step(self, inputs, optimizer):
+        """Training step for VAE models."""
+        self.model.train()
+        inputs = self.to_device(inputs)
+
+        optimizer.zero_grad()
+        predictions = self.model(inputs['image'])
+        
+        # VAE training mode: (reconstructed, mu, log_var, features)
+        reconstructed, mu, log_var, features = predictions
+        
+        # VAE loss expects (reconstructed, original, mu, log_var)
+        loss_dict = self.loss_fn(reconstructed, inputs['image'], mu, log_var)
+        if isinstance(loss_dict, dict):
+            loss = loss_dict['total_loss']
+        else:
+            loss = loss_dict
+        
+        loss.backward()
+        optimizer.step()
+
+        results = {'loss': loss.item()}
+        
+        # Add VAE-specific loss components if available
+        if isinstance(loss_dict, dict):
+            if 'recon_loss' in loss_dict:
+                results['recon_loss'] = loss_dict['recon_loss'].item()
+            if 'kl_loss' in loss_dict:
+                results['kl_loss'] = loss_dict['kl_loss'].item()
+        
+        with torch.no_grad():
+            for metric_name, metric_fn in self.metrics.items():
+                metric_value = metric_fn(reconstructed, inputs['image'])
+                results[metric_name] = float(metric_value)
+        return results
+
+    def validation_step(self, inputs):
+        """Validation step for VAE models."""
+        self.model.train()  # Keep training mode for validation
+        inputs = self.to_device(inputs)
+
+        with torch.no_grad():
+            # VAE training mode: (reconstructed, mu, log_var, features)
+            reconstructed, mu, log_var, features = self.model(inputs['image'])
+            
+            # VAE loss calculation
+            loss_dict = self.loss_fn(reconstructed, inputs['image'], mu, log_var)
+            if isinstance(loss_dict, dict):
+                loss = loss_dict['total_loss']
+            else:
+                loss = loss_dict
+
+            results = {'loss': loss.item()}
+            
+            # Add VAE-specific loss components if available
+            if isinstance(loss_dict, dict):
+                if 'recon_loss' in loss_dict:
+                    results['recon_loss'] = loss_dict['recon_loss'].item()
+                if 'kl_loss' in loss_dict:
+                    results['kl_loss'] = loss_dict['kl_loss'].item()
+            
+            for metric_name, metric_fn in self.metrics.items():
+                metric_value = metric_fn(reconstructed, inputs['image'])
+                results[metric_name] = float(metric_value)
+        return results
+
+    def predict_step(self, inputs):
+        """Deployment-optimized prediction step for VAE."""
+        self.model.eval()  # Use inference mode
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            
+            if isinstance(predictions, dict) and 'pred_score' in predictions:
+                # Model returns inference outputs directly
+                return {
+                    'pred_scores': predictions['pred_score'],
+                    'anomaly_maps': predictions.get('anomaly_map', None)
+                }
+            else:
+                # In eval mode, VAE uses mu (mean) for deterministic output
+                # Should return {'pred_score': ..., 'anomaly_map': ...}
+                # If model doesn't return dict, compute anomaly map manually
+                if hasattr(self.model, 'compute_anomaly_map'):
+                    # Use model's method if available
+                    reconstructed = predictions.get('reconstructed', predictions[0] if isinstance(predictions, tuple) else None)
+                    if reconstructed is not None:
+                        anomaly_maps = self.model.compute_anomaly_map(inputs['image'], reconstructed)
+                        pred_scores = self.model.compute_anomaly_score(anomaly_maps)
+                    else:
+                        # Fallback computation
+                        anomaly_maps = torch.zeros_like(inputs['image'][:, :1])
+                        pred_scores = torch.zeros(inputs['image'].shape[0], device=self.device)
+                else:
+                    # Manual computation as fallback
+                    anomaly_maps = torch.zeros_like(inputs['image'][:, :1])
+                    pred_scores = torch.zeros(inputs['image'].shape[0], device=self.device)
+                
+                return {
+                    'pred_scores': pred_scores,
+                    'anomaly_maps': anomaly_maps
+                }
+
+    def test_step(self, inputs):
+        """Evaluation-focused test step for VAE."""
+        self.model.eval()
+        inputs = self.to_device(inputs)
+        
+        with torch.no_grad():
+            predictions = self.model(inputs['image'])
+            
+            if isinstance(predictions, dict) and 'pred_score' in predictions:
+                # Model returns inference outputs directly
+                results = {
+                    'pred_scores': predictions['pred_score'],
+                    'anomaly_maps': predictions.get('anomaly_map', None),
+                    'gt_labels': inputs['label']
+                }
+            else:
+                # Compute anomaly outputs from model predictions
+                if hasattr(self.model, 'compute_anomaly_map'):
+                    reconstructed = predictions.get('reconstructed', predictions[0] if isinstance(predictions, tuple) else None)
+                    if reconstructed is not None:
+                        anomaly_maps = self.model.compute_anomaly_map(inputs['image'], reconstructed)
+                        pred_scores = self.model.compute_anomaly_score(anomaly_maps)
+                    else:
+                        anomaly_maps = torch.zeros_like(inputs['image'][:, :1])
+                        pred_scores = torch.zeros(inputs['image'].shape[0], device=self.device)
+                else:
+                    anomaly_maps = torch.zeros_like(inputs['image'][:, :1])
+                    pred_scores = torch.zeros(inputs['image'].shape[0], device=self.device)
+                
                 results = {
                     'pred_scores': pred_scores,
                     'anomaly_maps': anomaly_maps,

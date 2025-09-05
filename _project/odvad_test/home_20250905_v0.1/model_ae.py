@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import NamedTuple
 
-from model_base import BaseModel, TimmFeatureExtractor, ConvBlock, DeconvBlock
+from model_base import TimmFeatureExtractor, ConvBlock, DeconvBlock
 
 
 # =============================================================================
@@ -108,7 +108,7 @@ class VanillaDecoder(nn.Module):
         return reconstructed
 
 
-class VanillaAE(BaseModel):
+class VanillaAE(nn.Module):
     """Vanilla AutoEncoder with optional TimmFeatureExtractor backbone."""
     
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256,
@@ -139,7 +139,7 @@ class VanillaAE(BaseModel):
         """Compute image-level anomaly score."""
         pred_score = torch.amax(anomaly_map, dim=(-2, -1))
         return pred_score
-
+    
     def forward(self, images):
         """Forward pass with conditional backbone support."""
         latent, features = self.encoder(images)
@@ -316,7 +316,7 @@ class UNetDecoder(nn.Module):
         return reconstructed
 
 
-class UNetAE(BaseModel):
+class UNetAE(nn.Module):
     """U-Net AutoEncoder with optional TimmFeatureExtractor backbone."""
     
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256,

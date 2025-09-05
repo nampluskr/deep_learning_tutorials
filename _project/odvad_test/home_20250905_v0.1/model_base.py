@@ -96,40 +96,6 @@ class DeconvBlock(nn.Module):
         return self.deconv_block(x)
 
 
-# ===================================================================
-# Base Model
-# ===================================================================
-
-class BaseModel(nn.Module, ABC):
-    """Base model for anomaly detection with standardized compute methods."""
-
-    @abstractmethod
-    def compute_anomaly_map(self, *args, **kwargs) -> torch.Tensor:
-        """Model-specific anomaly map computation.
-
-        Parameters vary by model type:
-        - AE: compute_anomaly_map(original, reconstructed)
-        - STFPM: compute_anomaly_map(teacher_features, student_features, image_size)
-        - Flow: compute_anomaly_map(log_prob, output_size)
-        - DRAEM: compute_anomaly_map(original, reconstructed, discriminator_features)
-
-        Returns: [B, 1, H, W] anomaly map
-        """
-
-    def compute_anomaly_score(self, anomaly_map: torch.Tensor) -> torch.Tensor:
-        """Default max pooling implementation (can be overridden)."""
-        return torch.amax(anomaly_map, dim=(-2, -1))
-
-    @abstractmethod
-    def forward(self, inputs):
-        """Training/inference mode handling.
-
-        Returns:
-        - training=True: Model-specific outputs (tuple/dict)
-        - training=False: {'pred_score': tensor, 'anomaly_map': tensor}
-        """
-
-
 class TimmFeatureExtractor(nn.Module):
     def __init__(self, backbone, layers, pre_trained=True, requires_grad=False):
         super().__init__()

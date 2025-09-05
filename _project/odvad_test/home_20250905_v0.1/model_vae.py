@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple
 
-from model_base import BaseModel, TimmFeatureExtractor, ConvBlock, DeconvBlock
+from model_base import TimmFeatureExtractor, ConvBlock, DeconvBlock
 
 
 # =============================================================================
@@ -118,7 +118,7 @@ class VanillaVAEDecoder(nn.Module):
         return reconstructed
 
 
-class VanillaVAE(BaseModel):
+class VanillaVAE(nn.Module):
     """Vanilla Variational AutoEncoder with optional TimmFeatureExtractor backbone."""
     
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256,
@@ -343,7 +343,7 @@ class UNetVAEDecoder(nn.Module):
         return reconstructed
 
 
-class UNetVAE(BaseModel):
+class UNetVAE(nn.Module):
     """U-Net Variational AutoEncoder with optional TimmFeatureExtractor backbone."""
     
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256,

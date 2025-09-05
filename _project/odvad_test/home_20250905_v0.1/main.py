@@ -41,6 +41,8 @@ DATA_CONFIGS = {
 MODEL_CONFIGS = {
     "vanilla_ae": SimpleNamespace(
         modeler_type="ae",
+        trainer_type="reconstruction",
+
         model_type="vanilla_ae",
         model_params=dict(),
         loss_type="ae",
@@ -49,6 +51,8 @@ MODEL_CONFIGS = {
     ),
     "unet_ae": SimpleNamespace(
         modeler_type="ae",
+        trainer_type="reconstruction",
+
         model_type="unet_ae",
         model_params=dict(),
         loss_type="ae",
@@ -56,7 +60,9 @@ MODEL_CONFIGS = {
         metric_list=[("psnr", dict())],   # (metric_type, matric_params)
     ),
     "vanilla_vae": SimpleNamespace(
-        modeler_type="ae",
+        modeler_type="vae",
+        trainer_type="reconstruction",
+
         model_type="vanilla_vae",
         model_params=dict(),
         loss_type="vae",
@@ -64,7 +70,9 @@ MODEL_CONFIGS = {
         metric_list=[("psnr", dict())],   # (metric_type, matric_params)
     ),
     "unet_vae": SimpleNamespace(
-        modeler_type="ae",
+        modeler_type="vae",
+        trainer_type="reconstruction",
+
         model_type="unet_vae",
         model_params=dict(),
         loss_type="vae",
@@ -73,6 +81,8 @@ MODEL_CONFIGS = {
     ),
     "stfpm": SimpleNamespace(
         modeler_type="stfpm",
+        trainer_type="reconstruction",
+
         model_type="stfpm",
         model_params=dict(backbone="resnet50", layers=["layer1", "layer2", "layer3"]),
         loss_type="stfpm",
@@ -81,7 +91,7 @@ MODEL_CONFIGS = {
     ),
 }
 
-TRAIN_CONFIS = {
+TRAIN_CONFIGS = {
     "reconstruction": SimpleNamespace(
         trainer_type="reconstruction",
         optimizer_type="adamw",
@@ -94,12 +104,16 @@ TRAIN_CONFIS = {
 }
 
 
-def build_config(data_type, model_type, train_type):
+def build_config(data_type, model_type):
     config = SimpleNamespace()
     config = merge_configs(config, BASE_CONFIGS)
     config = merge_configs(config, DATA_CONFIGS[data_type])
-    config = merge_configs(config, MODEL_CONFIGS[model_type])
-    config = merge_configs(config, TRAIN_CONFIS[train_type])
+
+    model_config = MODEL_CONFIGS[model_type]
+    config = merge_configs(config, model_config)
+
+    trainer_type = model_config.trainer_type
+    config = merge_configs(config, TRAIN_CONFIGS[trainer_type])
 
     if model_type in ["patchcore", "padim"]:    # memory-based models
         config.num_epochs = 1
@@ -191,10 +205,11 @@ METRIC_REGISTRY = {
 # Modelers
 # ===================================================================
 
-from modeler import AEModeler, STFPMModeler
+from modeler import AEModeler, VAEModeler, STFPMModeler
 
 MODELER_REGISTRY = {
     "ae": AEModeler,
+    "vae": VAEModeler,
     "stfpm": STFPMModeler,
 }
 
@@ -425,7 +440,7 @@ def run_experiment(config):
         optimizer = build_optimizer(config.optimizer_type, model=model, **config.optimizer_params)
         scheduler = build_scheduler(config.scheduler_type, optimizer=optimizer, **config.scheduler_params)
         stopper = build_stopper(config.stopper_type, **config.stopper_params)
-        trainer = build_trainer(config.trainer_type, modeler=modeler, optimizer=optimizer, 
+        trainer = build_trainer(config.trainer_type, modeler=modeler, optimizer=optimizer,
             scheduler=scheduler, stopper=stopper)
         show_trainer_info(trainer, verbose=config.show_trainer)
 
@@ -578,8 +593,8 @@ def show_results(results):
     print(f" > F1-Score:          {results['f1']:.4f}")
 
 
-def run(data_type, model_type, train_type, categories=[], verbose=False):
-    config = build_config(data_type, model_type, train_type)
+def run(data_type, model_type, categories=[], verbose=False):
+    config = build_config(data_type, model_type)
     config.dataloader_params["categories"] = categories
     config.verbose = verbose
     config.show_dataloader=True
@@ -607,8 +622,8 @@ def get_device():
 if __name__ == "__main__":
 
     categories=["bottle", "tile"]
-    # run("mvtec", "vanilla_ae", "reconstruction", categories=categories)
-    # run("mvtec", "unet_ae", "reconstruction", categories=categories)
-    run("mvtec", "vanilla_vae", "reconstruction", categories=categories)
-    run("mvtec", "unet_vae", "reconstruction", categories=categories)
-    # run("mvtec", "stfpm", "reconstruction", categories=categories)
+    run("mvtec", "vanilla_ae", categories=categories)
+    run("mvtec", "unet_ae", categories=categories)
+    run("mvtec", "vanilla_vae", categories=categories)
+    run("mvtec", "unet_vae", categories=categories)
+    run("mvtec", "stfpm", categories=categories)
