@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Experiment outputs
+experiments/
+experiments/**/*.pth
+experiments/**/*.pkl
+experiments/**/*.json
+experiments/**/*.txt
+experiments/**/*.log
+
 ## Unignore all with extensions
 *
 !/*.*/

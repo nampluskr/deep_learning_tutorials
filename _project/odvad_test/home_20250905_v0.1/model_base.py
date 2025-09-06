@@ -16,18 +16,10 @@ try:
 except ImportError:
     HAS_TORCHVISION_FEATURE_EXTRACTION = False
 
-try:
-    from torch.fx.graph_module import GraphModule
-    HAS_TORCH_FX = True
-except ImportError:
-    HAS_TORCH_FX = False
 
 logger = logging.getLogger(__name__)
 
-
-# BACKBONE_DIR = os.path.abspath(os.path.join("..", "..", "backbones"))
-BACKBONE_DIR="/mnt/d/backbones"
-
+BACKBONE_DIR = "/mnt/d/backbones"
 BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
     "resnet34": "resnet34-b627a593.pth",
@@ -37,14 +29,12 @@ BACKBONE_WEIGHT_FILES = {
     "vgg16": "vgg16-397923af.pth",
     "alexnet": "alexnet-owt-7be5be79.pth",
     "squeezenet1_1": "squeezenet1_1-b8a52dc0.pth",
-
-    # EfficientAD teacher weights
+    # EfficientAD weights
     "efficientad_teacher_small": "pretrained_teacher_small.pth",
     "efficientad_teacher_medium": "pretrained_teacher_medium.pth",
-
-    # LPIPS weights (for future use)
+    # LPIPS weights
     "lpips_alex": "lpips_alex.pth",
-    "lpips_vgg": "lpips_vgg.pth", 
+    "lpips_vgg": "lpips_vgg.pth",
     "lpips_squeeze": "lpips_squeeze.pth"
 }
 
@@ -56,24 +46,39 @@ def set_backbone_dir(path):
 
 
 def get_local_weight_path(backbone):
+    """Get local weight path"""
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
-        return os.path.join(BACKBONE_DIR, filename)  # 전역 변수 사용
+        return os.path.join(BACKBONE_DIR, filename)
     else:
         return os.path.join(BACKBONE_DIR, f"{backbone}.pth")
 
 
-def dryrun_find_featuremap_dims(feature_extractor, input_size, layers):
-    device = next(feature_extractor.parameters()).device
-    dryrun_input = torch.empty(1, 3, *input_size).to(device)
-    dryrun_features = feature_extractor(dryrun_input)
-    return {
-        layer: {
-            "num_features": dryrun_features[layer].shape[1],
-            "resolution": dryrun_features[layer].shape[2:],
-        }
-        for layer in layers
-    }
+def check_backbone_files(backbone_dir=None):
+    """Check if backbone files exist in the directory"""
+    if backbone_dir is None:
+        backbone_dir = BACKBONE_DIR
+
+    print(f" > Checking backbone directory: {backbone_dir}")
+    if not os.path.exists(backbone_dir):
+        print(f" > Warning: Backbone directory not found: {backbone_dir}")
+        print(f" > Continuing with random initialization...")
+        return False
+
+    required_files = list(BACKBONE_WEIGHT_FILES.values())
+    missing_files = []
+    for file in required_files:
+        full_path = os.path.join(backbone_dir, file)
+        if not os.path.exists(full_path):
+            missing_files.append(file)
+
+    if missing_files:
+        print(f" > Warning: Missing backbone files: {missing_files}")
+        print(f" > Continuing with random initialization...")
+        return False
+
+    print(f" > All backbone weights verified in: {backbone_dir}")
+    return True
 
 # ===================================================================
 # Convolutional Blocks
@@ -103,6 +108,11 @@ class DeconvBlock(nn.Module):
 
     def forward(self, x):
         return self.deconv_block(x)
+
+
+# ===================================================================
+# Feature Extractor
+# ===================================================================
 
 
 class TimmFeatureExtractor(nn.Module):
@@ -196,6 +206,19 @@ class TimmFeatureExtractor(nn.Module):
         if not isinstance(features, dict):
             features = dict(zip(self.layers, features, strict=True))
         return features
+
+
+def dryrun_find_featuremap_dims(feature_extractor, input_size, layers):
+    device = next(feature_extractor.parameters()).device
+    dryrun_input = torch.empty(1, 3, *input_size).to(device)
+    dryrun_features = feature_extractor(dryrun_input)
+    return {
+        layer: {
+            "num_features": dryrun_features[layer].shape[1],
+            "resolution": dryrun_features[layer].shape[2:],
+        }
+        for layer in layers
+    }
 
 
 def load_backbone_weights(model_name, model):
