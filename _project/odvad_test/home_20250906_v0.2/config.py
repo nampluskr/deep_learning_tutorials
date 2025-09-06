@@ -1,3 +1,4 @@
+import os
 from types import SimpleNamespace
 from datetime import datetime
 
@@ -24,7 +25,6 @@ BASE_CONFIGS = SimpleNamespace(
     save_model=True,
     save_history=True,
     save_results=True,
-
 )
 
 
@@ -198,3 +198,101 @@ def merge_configs(destination, source):
         else:
             setattr(destination, key, value)
     return destination
+
+
+def save_config(config, output_dir, logger=None):
+    """Save experiment configuration to JSON file."""
+    import json
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    config_path = os.path.join(output_dir, f"config_{timestamp}.json")
+
+    try:
+        config_dict = {}    # Convert config to dictionary
+        for attr in dir(config):
+            if not attr.startswith('_'):
+                value = getattr(config, attr)
+                if isinstance(value, (int, float, str, bool, list, dict)):
+                    config_dict[attr] = value
+                elif hasattr(value, '__dict__'):
+                    config_dict[attr] = str(value)
+                else:
+                    config_dict[attr] = str(value)
+
+        config_data = {
+            'timestamp': timestamp,
+            'configuration': config_dict
+        }
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        filename = os.path.basename(config_path)
+        success_msg = f" > Config saved: {filename}"
+        print(success_msg)
+        if logger:
+            logger.info(success_msg)
+
+    except Exception as e:
+        error_msg = f" > Config save failed: {str(e)}"
+        print(error_msg)
+        if logger:
+            logger.error(error_msg)
+
+
+def load_config(output_dir, logger=None, config_filename=None):
+    """Load experiment configuration from JSON file."""
+    import json
+    from glob import glob
+    from types import SimpleNamespace
+    
+    try:
+        if config_filename:
+            # 특정 파일명이 지정된 경우
+            config_path = os.path.join(output_dir, config_filename)
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"Config file not found: {config_filename}")
+        else:
+            # config_*.json 패턴으로 가장 최신 파일 찾기
+            config_pattern = os.path.join(output_dir, "config_*.json")
+            config_files = glob(config_pattern)
+            
+            if not config_files:
+                raise FileNotFoundError(f"No config files found in: {output_dir}")
+            
+            # 파일명의 timestamp 기준으로 가장 최신 파일 선택
+            config_path = max(config_files, key=os.path.getctime)
+        
+        # JSON 파일 로드
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        # configuration 섹션에서 설정 추출
+        if 'configuration' in config_data:
+            config_dict = config_data['configuration']
+        else:
+            config_dict = config_data  # 호환성을 위해
+        
+        # SimpleNamespace로 변환
+        config = SimpleNamespace()
+        for key, value in config_dict.items():
+            # 중첩된 dict를 SimpleNamespace로 변환
+            if isinstance(value, dict):
+                setattr(config, key, SimpleNamespace(**value))
+            else:
+                setattr(config, key, value)
+        
+        filename = os.path.basename(config_path)
+        success_msg = f" > Config loaded: {filename}"
+        print(success_msg)
+        if logger:
+            logger.info(success_msg)
+        
+        return config
+        
+    except Exception as e:
+        error_msg = f" > Config load failed: {str(e)}"
+        print(error_msg)
+        if logger:
+            logger.error(error_msg)
+        return None

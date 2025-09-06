@@ -470,7 +470,6 @@ def build_stopper(stopper_type, **stopper_params):
 # ===================================================================
 
 from model_base import set_backbone_dir, check_backbone_files
-from trainer import get_logger
 
 def run_experiment(config):
     logger = None

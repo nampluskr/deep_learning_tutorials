@@ -5,8 +5,7 @@ import torch
 import logging
 
 from model_base import set_backbone_dir, check_backbone_files
-from trainer import get_logger
-from config import build_config
+from config import build_config, save_config
 from builders import (build_transform, build_dataloader, build_model, build_loss_fn, build_metrics,
     build_modeler, build_optimizer, build_scheduler, build_stopper, build_trainer)
 
@@ -317,45 +316,6 @@ def show_gpu_memory(verbose=True, logger=None):
 # Save Functions
 # ===================================================================
 
-def save_config(config, output_dir, logger=None):
-    """Save experiment configuration to JSON file."""
-    import json
-    from datetime import datetime
-
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    config_path = os.path.join(output_dir, f"config_{timestamp}.json")
-
-    try:
-        config_dict = {}    # Convert config to dictionary
-        for attr in dir(config):
-            if not attr.startswith('_'):
-                value = getattr(config, attr)
-                if isinstance(value, (int, float, str, bool, list, dict)):
-                    config_dict[attr] = value
-                elif hasattr(value, '__dict__'):
-                    config_dict[attr] = str(value)
-                else:
-                    config_dict[attr] = str(value)
-
-        config_data = {
-            'timestamp': timestamp,
-            'configuration': config_dict
-        }
-        with open(config_path, 'w') as f:
-            json.dump(config_data, f, indent=2)
-
-        filename = os.path.basename(config_path)
-        success_msg = f" > Config saved: {filename}"
-        print(success_msg)
-        if logger:
-            logger.info(success_msg)
-
-    except Exception as e:
-        error_msg = f" > Config save failed: {str(e)}"
-        print(error_msg)
-        if logger:
-            logger.error(error_msg)
-
 
 def save_model(model, output_dir, logger=None):
     """Save model weights to PTH file."""
@@ -381,6 +341,47 @@ def save_model(model, output_dir, logger=None):
         print(error_msg)
         if logger:
             logger.error(error_msg)
+
+
+def load_model(model, output_dir, logger=None, model_filename=None):
+    """Load model weights from PTH file."""
+    from glob import glob
+    
+    try:
+        if model_filename:
+            model_path = os.path.join(output_dir, model_filename)
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found: {model_filename}")
+        else:
+            model_pattern = os.path.join(output_dir, "model_*.pth")
+            model_files = glob(model_pattern)
+            
+            if not model_files:
+                raise FileNotFoundError(f"No model files found in: {output_dir}")
+
+            model_path = max(model_files, key=os.path.getctime)
+        
+        if hasattr(model, 'load_model'):
+            model.load_model(model_path)
+        else:
+            device = next(model.parameters()).device if list(model.parameters()) else 'cpu'
+            state_dict = torch.load(model_path, map_location=device)
+            model.load_state_dict(state_dict)
+        
+        filename = os.path.basename(model_path)
+        success_msg = f" > Model loaded: {filename}"
+        print(success_msg)
+        if logger:
+            logger.info(success_msg)
+        
+        return model
+        
+    except Exception as e:
+        error_msg = f" > Model load failed: {str(e)}"
+        print(error_msg)
+        if logger:
+            logger.error(error_msg)
+        return None
 
 
 def save_history(history, output_dir, logger=None):
