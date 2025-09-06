@@ -477,7 +477,6 @@ def run_experiment(config):
     try:
         ## 0. Experiment setup
         torch.cuda.reset_peak_memory_stats()
-
         if config.save_log:
             logger = get_logger(config.output_dir, log_name=config.log_name)
 
@@ -514,7 +513,10 @@ def run_experiment(config):
         show_results(results, logger=logger)
 
         ## 5. Save Model and Results
-        save_experiment(config, model, history, results, logger=logger)
+        if config.save_config: save_config(config, config.output_dir, logger=logger)
+        if config.save_model: save_model(model, config.output_dir, logger=logger)
+        if config.save_history: save_history(history, config.output_dir, logger=logger)
+        if config.save_results: save_results(results, config.output_dir, logger=logger)
 
     finally:
         # Phase 1: High-level components (dependency holders)
@@ -714,201 +716,167 @@ def show_gpu_memory(verbose=True, logger=None):
 
 
 
-def save_experiment(config, model, history, results, logger=None):
-    """Save experiment outputs based on configuration settings."""
+def save_config(config, output_dir, logger=None):
+    """Save experiment configuration to JSON file."""
     import json
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    config_path = os.path.join(output_dir, f"config_{timestamp}.json")
+
+    try:
+        config_dict = {}    # Convert config to dictionary
+        for attr in dir(config):
+            if not attr.startswith('_'):
+                value = getattr(config, attr)
+                if isinstance(value, (int, float, str, bool, list, dict)):
+                    config_dict[attr] = value
+                elif hasattr(value, '__dict__'):
+                    config_dict[attr] = str(value)
+                else:
+                    config_dict[attr] = str(value)
+
+        config_data = {
+            'timestamp': timestamp,
+            'configuration': config_dict
+        }
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=2)
+
+        filename = os.path.basename(config_path)
+        success_msg = f" > Config saved: {filename}"
+        print(success_msg)
+        if logger: 
+            logger.info(success_msg)
+
+    except Exception as e:
+        error_msg = f" > Config save failed: {str(e)}"
+        print(error_msg)
+        if logger: 
+            logger.error(error_msg)
+
+
+def save_model(model, output_dir, logger=None):
+    """Save model weights to PTH file."""
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    model_path = os.path.join(output_dir, f"model_{timestamp}.pth")
+
+    try:
+        if hasattr(model, 'save_model'): 
+            model.save_model(model_path)
+        else: 
+            torch.save(model.state_dict(), model_path)
+
+        filename = os.path.basename(model_path)
+        success_msg = f" > Model saved: {filename}"
+        print(success_msg)
+        if logger: 
+            logger.info(success_msg)
+
+    except Exception as e:
+        error_msg = f" > Model save failed: {str(e)}"
+        print(error_msg)
+        if logger: 
+            logger.error(error_msg)
+
+
+def save_history(history, output_dir, logger=None):
+    """Save training history to pickle file."""
     import pickle
     from datetime import datetime
 
-    # Check if any save option is enabled
-    if not any([config.save_config, config.save_model, config.save_history, config.save_results]):
-        return []
-
-    # Create output directory
-    os.makedirs(config.output_dir, exist_ok=True)
+    if not history:
+        return
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    history_path = os.path.join(output_dir, f"history_{timestamp}.pkl")
 
-    # Log save start
-    save_msg = f" > Saving experiment outputs to: {config.output_dir}"
-    print(save_msg)
-    if logger:
-        logger.info(save_msg)
+    try:
+        with open(history_path, 'wb') as f:
+            pickle.dump(history, f)
 
-    saved_files = []
+        filename = os.path.basename(history_path)
+        success_msg = f" > History saved: {filename}"
+        print(success_msg)
+        if logger: 
+            logger.info(success_msg)
 
-    # 1. Save configuration
-    if config.save_config:
-        try:
-            config_path = os.path.join(config.output_dir, f"config_{timestamp}.json")
+    except Exception as e:
+        error_msg = f" > History save failed: {str(e)}"
+        print(error_msg)
+        if logger: 
+            logger.error(error_msg)
 
-            # Convert config to dictionary
-            config_dict = {}
-            for attr in dir(config):
-                if not attr.startswith('_'):
-                    value = getattr(config, attr)
-                    if isinstance(value, (int, float, str, bool, list, dict)):
-                        config_dict[attr] = value
-                    elif hasattr(value, '__dict__'):
-                        config_dict[attr] = str(value)
-                    else:
-                        config_dict[attr] = str(value)
 
-            config_data = {
-                'timestamp': timestamp,
-                'configuration': config_dict
-            }
+def save_results(results, output_dir, logger=None):
+    """Save experiment results to JSON file."""
+    import json
+    from datetime import datetime
 
-            with open(config_path, 'w') as f:
-                json.dump(config_data, f, indent=2)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    results_path = os.path.join(output_dir, f"results_{timestamp}.json")
 
-            saved_files.append(f"config_{timestamp}.json")
-            success_msg = f"   - Config saved: {os.path.basename(config_path)}"
-            print(success_msg)
-            if logger:
-                logger.info(success_msg)
-        except Exception as e:
-            error_msg = f"   - Config save failed: {str(e)}"
-            print(error_msg)
-            if logger:
-                logger.error(error_msg)
-
-    # 2. Save model weights
-    if config.save_model:
-        try:
-            model_path = os.path.join(config.output_dir, f"model_{timestamp}.pth")
-            if hasattr(model, 'save_model'):
-                model.save_model(model_path)
+    try:
+        # Convert results to JSON serializable format
+        serializable_results = {}
+        for key, value in results.items():
+            if isinstance(value, torch.Tensor):
+                serializable_results[key] = value.item() if value.numel() == 1 else value.tolist()
+            elif isinstance(value, (int, float, str, bool, list, dict)):
+                serializable_results[key] = value
             else:
-                torch.save(model.state_dict(), model_path)
+                serializable_results[key] = str(value)
 
-            saved_files.append(f"model_{timestamp}.pth")
-            success_msg = f"   - Model saved: {os.path.basename(model_path)}"
-            print(success_msg)
-            if logger:
-                logger.info(success_msg)
-        except Exception as e:
-            error_msg = f"   - Model save failed: {str(e)}"
-            print(error_msg)
-            if logger:
-                logger.error(error_msg)
+        # Create results data
+        experiment_data = {
+            'timestamp': timestamp,
+            'results': serializable_results
+        }
 
-    # 3. Save training history
-    if config.save_history and history:
-        try:
-            history_path = os.path.join(config.output_dir, f"history_{timestamp}.pkl")
-            with open(history_path, 'wb') as f:
-                pickle.dump(history, f)
+        with open(results_path, 'w') as f:
+            json.dump(experiment_data, f, indent=2)
 
-            saved_files.append(f"history_{timestamp}.pkl")
-            success_msg = f"   - History saved: {os.path.basename(history_path)}"
-            print(success_msg)
-            if logger:
-                logger.info(success_msg)
-        except Exception as e:
-            error_msg = f"   - History save failed: {str(e)}"
-            print(error_msg)
-            if logger:
-                logger.error(error_msg)
+        filename = os.path.basename(results_path)
+        success_msg = f" > Results saved: {filename}"
+        print(success_msg)
+        if logger: 
+            logger.info(success_msg)
 
-    # 4. Save experiment results
-    if config.save_results:
-        try:
-            results_path = os.path.join(config.output_dir, f"results_{timestamp}.json")
+    except Exception as e:
+        error_msg = f" > Results save failed: {str(e)}"
+        print(error_msg)
+        if logger: 
+            logger.error(error_msg)
 
-            # Convert results to JSON serializable format
-            serializable_results = {}
-            for key, value in results.items():
-                if isinstance(value, torch.Tensor):
-                    serializable_results[key] = value.item() if value.numel() == 1 else value.tolist()
-                elif isinstance(value, (int, float, str, bool, list, dict)):
-                    serializable_results[key] = value
-                else:
-                    serializable_results[key] = str(value)
 
-            # Create comprehensive results data
-            experiment_data = {
-                'timestamp': timestamp,
-                'model_type': config.model_type,
-                'dataloader_type': config.dataloader_type,
-                'results': serializable_results,
-                'saved_files': saved_files
-            }
+def show_results(results, logger=None):
+    """Display and save experiment results."""
+    result_lines = [
+        "",  # empty line
+        "-" * 60,
+        "EXPERIMENT RESULTS",
+        "-" * 60,
+        f" > AUROC:             {results['auroc']:.4f}",
+        f" > AUPR:              {results['aupr']:.4f}",
+        f" > Threshold:         {results['threshold']:.3e}",
+        "-" * 60,
+        f" > Accuracy:          {results['accuracy']:.4f}",
+        f" > Precision:         {results['precision']:.4f}",
+        f" > Recall:            {results['recall']:.4f}",
+        f" > F1-Score:          {results['f1']:.4f}",
+        ""  # empty line at the end
+    ]
 
-            with open(results_path, 'w') as f:
-                json.dump(experiment_data, f, indent=2)
-
-            saved_files.append(f"results_{timestamp}.json")
-            success_msg = f"   - Results saved: {os.path.basename(results_path)}"
-            print(success_msg)
-            if logger:
-                logger.info(success_msg)
-        except Exception as e:
-            error_msg = f"   - Results save failed: {str(e)}"
-            print(error_msg)
-            if logger:
-                logger.error(error_msg)
-
-    # 5. Save experiment summary (always save if any file is saved)
-    if saved_files:
-        try:
-            summary_path = os.path.join(config.output_dir, f"summary_{timestamp}.txt")
-            with open(summary_path, 'w') as f:
-                f.write("="*60 + "\n")
-                f.write("EXPERIMENT SUMMARY\n")
-                f.write("="*60 + "\n")
-                f.write(f"Timestamp: {timestamp}\n")
-                f.write(f"Model Type: {config.model_type}\n")
-                f.write(f"Dataset Type: {config.dataloader_type}\n")
-                f.write(f"Output Directory: {config.output_dir}\n\n")
-
-                f.write("SAVE OPTIONS:\n")
-                f.write("-"*30 + "\n")
-                f.write(f"Save Config:   {config.save_config}\n")
-                f.write(f"Save Model:    {config.save_model}\n")
-                f.write(f"Save History:  {config.save_history}\n")
-                f.write(f"Save Results:  {config.save_results}\n\n")
-
-                f.write("RESULTS:\n")
-                f.write("-"*30 + "\n")
-                for key, value in results.items():
-                    if isinstance(value, torch.Tensor):
-                        if value.numel() == 1:
-                            f.write(f"{key:15s}: {value.item():.6f}\n")
-                        else:
-                            f.write(f"{key:15s}: tensor shape {value.shape}\n")
-                    else:
-                        f.write(f"{key:15s}: {value}\n")
-
-                f.write("\nSAVED FILES:\n")
-                f.write("-"*30 + "\n")
-                for file in saved_files:
-                    f.write(f"- {file}\n")
-
-            saved_files.append(f"summary_{timestamp}.txt")
-            success_msg = f"   - Summary saved: {os.path.basename(summary_path)}"
-            print(success_msg)
-            if logger:
-                logger.info(success_msg)
-        except Exception as e:
-            error_msg = f"   - Summary save failed: {str(e)}"
-            print(error_msg)
-            if logger:
-                logger.error(error_msg)
-
-    # Final summary
-    if saved_files:
-        final_msg = f" > Total {len(saved_files)} files saved successfully"
-        print(final_msg)
+    # Print to console and log to file (including empty lines)
+    for line in result_lines:
+        print(line)
         if logger:
-            logger.info(final_msg)
-    else:
-        no_save_msg = " > No files saved (all save options disabled)"
-        print(no_save_msg)
-        if logger:
-            logger.info(no_save_msg)
-
-    return saved_files
+            if line == "":  # empty line as space
+                logger.info(" ")
+            else:
+                logger.info(line)
 
 
 def run(data_type, model_type, categories=[], verbose=False):
@@ -919,7 +887,7 @@ def run(data_type, model_type, categories=[], verbose=False):
     config.show_modeler=True
     config.show_trainer=True
     config.show_memory=True
-    config.num_epochs = 5
+    config.num_epochs = 10
 
     if model_type in ["fastflow"]:
         config.optimizer_params=dict(lr=1e-5, weight_decay=1e-5)
@@ -944,12 +912,12 @@ def get_device():
 if __name__ == "__main__":
 
     categories=["bottle"]
-    # run("mvtec", "vanilla_ae", categories=categories)
-    # run("mvtec", "unet_ae", categories=categories)
+    run("mvtec", "vanilla_ae", categories=categories)
+    run("mvtec", "unet_ae", categories=categories)
     # run("mvtec", "vanilla_vae", categories=categories)
     # run("mvtec", "unet_vae", categories=categories)
 
-    run("mvtec", "stfpm", categories=categories)
+    # run("mvtec", "stfpm", categories=categories)
     # run("mvtec", "fastflow", categories=categories)
     # run("mvtec", "draem", categories=categories)
     # run("mvtec", "efficientad", categories=categories)
