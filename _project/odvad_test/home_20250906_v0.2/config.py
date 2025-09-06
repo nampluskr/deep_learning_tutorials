@@ -203,10 +203,9 @@ def merge_configs(destination, source):
 def save_config(config, output_dir, logger=None):
     """Save experiment configuration to JSON file."""
     import json
-    from datetime import datetime
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    config_path = os.path.join(output_dir, f"config_{timestamp}.json")
+    folder_name = os.path.basename(os.path.normpath(output_dir))
+    config_path = os.path.join(output_dir, f"config_{folder_name}.json")
 
     try:
         config_dict = {}    # Convert config to dictionary
@@ -221,7 +220,7 @@ def save_config(config, output_dir, logger=None):
                     config_dict[attr] = str(value)
 
         config_data = {
-            'timestamp': timestamp,
+            'experiment_name': folder_name,
             'configuration': config_dict
         }
         with open(config_path, 'w') as f:

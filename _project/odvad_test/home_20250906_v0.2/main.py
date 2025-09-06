@@ -319,10 +319,8 @@ def show_gpu_memory(verbose=True, logger=None):
 
 def save_model(model, output_dir, logger=None):
     """Save model weights to PTH file."""
-    from datetime import datetime
-
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    model_path = os.path.join(output_dir, f"model_{timestamp}.pth")
+    folder_name = os.path.basename(os.path.normpath(output_dir))
+    model_path = os.path.join(output_dir, f"model_{folder_name}.pth")
 
     try:
         if hasattr(model, 'save_model'):
@@ -387,17 +385,17 @@ def load_model(model, output_dir, logger=None, model_filename=None):
 def save_history(history, output_dir, logger=None):
     """Save training history to pickle file."""
     import pickle
-    from datetime import datetime
 
-    if not history:
-        return
-
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    history_path = os.path.join(output_dir, f"history_{timestamp}.pkl")
+    folder_name = os.path.basename(os.path.normpath(output_dir))
+    history_path = os.path.join(output_dir, f"history_{folder_name}.pkl")
 
     try:
+        history_data = {
+            'experiment_name': folder_name,
+            'history': history
+        }
         with open(history_path, 'wb') as f:
-            pickle.dump(history, f)
+            pickle.dump(history_data, f)
 
         filename = os.path.basename(history_path)
         success_msg = f" > History saved: {filename}"
@@ -415,13 +413,11 @@ def save_history(history, output_dir, logger=None):
 def save_results(results, output_dir, logger=None):
     """Save experiment results to JSON file."""
     import json
-    from datetime import datetime
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    results_path = os.path.join(output_dir, f"results_{timestamp}.json")
+    folder_name = os.path.basename(os.path.normpath(output_dir))
+    results_path = os.path.join(output_dir, f"results_{folder_name}.json")
 
     try:
-        # Convert results to JSON serializable format
         serializable_results = {}
         for key, value in results.items():
             if isinstance(value, torch.Tensor):
@@ -431,12 +427,10 @@ def save_results(results, output_dir, logger=None):
             else:
                 serializable_results[key] = str(value)
 
-        # Create results data
         experiment_data = {
-            'timestamp': timestamp,
+            'experiment_name': folder_name,
             'results': serializable_results
         }
-
         with open(results_path, 'w') as f:
             json.dump(experiment_data, f, indent=2)
 
