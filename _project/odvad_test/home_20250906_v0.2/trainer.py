@@ -43,7 +43,7 @@ class EarlyStopper:
 class BaseTrainer(ABC):
     """Base trainer with separated epoch methods for different model paradigms."""
 
-    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+    def __init__(self, modeler, optimizer=None, scheduler=None, stopper=None, logger=None):
         """Initialize trainer with modeler and training components."""
         self.modeler = modeler
         self.model = modeler.model
@@ -53,9 +53,13 @@ class BaseTrainer(ABC):
         self.stopper = stopper
         self.logger = logger
         self.metric_names = self.modeler.get_metric_names()
-        
+
     def fit(self, train_loader, num_epochs, valid_loader=None):
         """Complete training loop with validation."""
+
+        if self.optimizer is None:
+            raise ValueError("Optimizer is required for training (fit method)")
+
         history = {'loss': []}
         history.update({name: [] for name in self.metric_names})
         if valid_loader is not None:
@@ -139,6 +143,10 @@ class BaseTrainer(ABC):
 
     def train_epoch(self, train_loader, epoch, num_epochs):
         """Training epoch for training monitoring (with Backpropagation)."""
+
+        if self.optimizer is None:
+            raise ValueError("Optimizer is required for training")
+
         total_loss = 0.0
         total_metrics = {name: 0.0 for name in self.metric_names}
         num_batches = 0
@@ -202,6 +210,7 @@ class BaseTrainer(ABC):
         """Prediction epoch for deployment scenarios."""
         all_pred_scores = []
         all_anomaly_maps = []
+        all_labels = []
 
         with torch.no_grad():
             desc = "Predict"
@@ -214,15 +223,18 @@ class BaseTrainer(ABC):
                     if 'anomaly_maps' in batch_results:
                         all_anomaly_maps.append(batch_results['anomaly_maps'].cpu())
 
+                    if 'label' in inputs:
+                        all_labels.append(inputs['label'].cpu())
+
                     pbar.set_postfix({'samples': len(all_pred_scores)})
 
         # Return prediction results for deployment
-        results = {
-            'pred_scores': torch.cat(all_pred_scores, dim=0)
-        }
-
+        results = {'pred_scores': torch.cat(all_pred_scores, dim=0)}
         if all_anomaly_maps:
             results['anomaly_maps'] = torch.cat(all_anomaly_maps, dim=0)
+
+        if all_labels:
+            results['labels'] = torch.cat(all_labels, dim=0)
 
         return results
 

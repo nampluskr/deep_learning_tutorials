@@ -218,8 +218,8 @@ def build_trainer(trainer_type, **trainer_params):
 
     if modeler is None:
         raise ValueError("Modeler is required for trainer")
-    if optimizer is None:
-        raise ValueError("Optimizer is required for trainer")
+    # if optimizer is None:
+    #     raise ValueError("Optimizer is required for trainer")
 
     scheduler = trainer_params.pop('scheduler', None)
     stopper = trainer_params.pop('stopper', None)

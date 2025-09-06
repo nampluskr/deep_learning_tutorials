@@ -203,6 +203,7 @@ def merge_configs(destination, source):
 def save_config(config, output_dir, logger=None):
     """Save experiment configuration to JSON file."""
     import json
+    from datetime import datetime
 
     folder_name = os.path.basename(os.path.normpath(output_dir))
     config_path = os.path.join(output_dir, f"config_{folder_name}.json")
@@ -245,6 +246,27 @@ def load_config(output_dir, logger=None, config_filename=None):
     from glob import glob
     from types import SimpleNamespace
     
+    def dict_to_namespace_with_params(d):
+        """Dict를 SimpleNamespace로 변환하되, _params 키는 dict로 유지"""
+        if isinstance(d, dict):
+            ns = SimpleNamespace()
+            for key, value in d.items():
+                if key.endswith('_params'):
+                    # _params로 끝나는 키는 dict로 유지
+                    setattr(ns, key, value)
+                elif isinstance(value, dict):
+                    # 중첩된 dict는 재귀적으로 SimpleNamespace로 변환
+                    setattr(ns, key, dict_to_namespace_with_params(value))
+                elif isinstance(value, list):
+                    # 리스트 내 dict도 처리
+                    setattr(ns, key, [dict_to_namespace_with_params(item) if isinstance(item, dict) else item for item in value])
+                else:
+                    # 기본 타입은 그대로
+                    setattr(ns, key, value)
+            return ns
+        else:
+            return d
+    
     try:
         if config_filename:
             # 특정 파일명이 지정된 경우
@@ -263,7 +285,7 @@ def load_config(output_dir, logger=None, config_filename=None):
             config_path = max(config_files, key=os.path.getctime)
         
         # JSON 파일 로드
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8') as f:
             config_data = json.load(f)
         
         # configuration 섹션에서 설정 추출
@@ -272,14 +294,8 @@ def load_config(output_dir, logger=None, config_filename=None):
         else:
             config_dict = config_data  # 호환성을 위해
         
-        # SimpleNamespace로 변환
-        config = SimpleNamespace()
-        for key, value in config_dict.items():
-            # 중첩된 dict를 SimpleNamespace로 변환
-            if isinstance(value, dict):
-                setattr(config, key, SimpleNamespace(**value))
-            else:
-                setattr(config, key, value)
+        # SimpleNamespace로 변환 (_params는 dict로 유지)
+        config = dict_to_namespace_with_params(config_dict)
         
         filename = os.path.basename(config_path)
         success_msg = f" > Config loaded: {filename}"
