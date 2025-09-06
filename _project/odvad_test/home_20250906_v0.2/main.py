@@ -11,26 +11,27 @@ from builders import (build_transform, build_dataloader, build_model, build_loss
 
 
 # ===================================================================
-# Main pipe line
+# Simple Run Pipeline
 # ===================================================================
 
-def run(data_type, model_type, categories=[], verbose=False):
+def run_experiment(data_type, model_type, categories=[], verbose=False):
     config = build_config(data_type, model_type)
     config.dataloader_params["categories"] = categories
     config.verbose = verbose
-    config.show_dataloader=True
-    config.show_modeler=True
-    config.show_trainer=True
-    config.show_memory=True
     config.num_epochs = 10
 
     if model_type in ["fastflow"]:
         config.optimizer_params=dict(lr=1e-5, weight_decay=1e-5)
 
-    run_experiment(config)
+    main_pipeline(config)
 
 
-def run_experiment(config):
+# ===================================================================
+# Main Pipeline
+# ===================================================================
+
+
+def main_pipeline(config):
     logger = None
     try:
         ## 0. Experiment setup
@@ -115,7 +116,6 @@ def run_experiment(config):
 # Utility Functions
 # ===================================================================
 
-
 def get_logger(output_dir, log_name='experiment.log'):
     """Create logger for training progress tracking."""
     os.makedirs(output_dir, exist_ok=True)
@@ -126,7 +126,7 @@ def get_logger(output_dir, log_name='experiment.log'):
     logger.handlers.clear()
 
     file_handler = logging.FileHandler(log_file)
-    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', 
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S')
     file_handler.setFormatter(file_formatter)
 
@@ -187,7 +187,7 @@ def show_header(config, logger=None):
 
     # Log output with leading newline
     if logger:
-        logger.info(" ")  # 줄바꿈을 빈 공간으로 기록
+        logger.info(" ")
         logger.info("="*60)
         logger.info(exp_line)
         logger.info("="*60)
@@ -346,7 +346,7 @@ def save_model(model, output_dir, logger=None):
 def load_model(model, output_dir, logger=None, model_filename=None):
     """Load model weights from PTH file."""
     from glob import glob
-    
+
     try:
         if model_filename:
             model_path = os.path.join(output_dir, model_filename)
@@ -355,27 +355,27 @@ def load_model(model, output_dir, logger=None, model_filename=None):
         else:
             model_pattern = os.path.join(output_dir, "model_*.pth")
             model_files = glob(model_pattern)
-            
+
             if not model_files:
                 raise FileNotFoundError(f"No model files found in: {output_dir}")
 
             model_path = max(model_files, key=os.path.getctime)
-        
+
         if hasattr(model, 'load_model'):
             model.load_model(model_path)
         else:
             device = next(model.parameters()).device if list(model.parameters()) else 'cpu'
             state_dict = torch.load(model_path, map_location=device)
             model.load_state_dict(state_dict)
-        
+
         filename = os.path.basename(model_path)
         success_msg = f" > Model loaded: {filename}"
         print(success_msg)
         if logger:
             logger.info(success_msg)
-        
+
         return model
-        
+
     except Exception as e:
         error_msg = f" > Model load failed: {str(e)}"
         print(error_msg)
