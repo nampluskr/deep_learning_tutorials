@@ -484,12 +484,12 @@ def show_results(results, logger=None):
 if __name__ == "__main__":
 
     categories=["bottle"]
-    run("mvtec", "vanilla_ae", categories=categories)
-    run("mvtec", "unet_ae", categories=categories)
-    # run("mvtec", "vanilla_vae", categories=categories)
-    # run("mvtec", "unet_vae", categories=categories)
+    # run_experiment("mvtec", "vanilla_ae", categories=categories)
+    # run_experiment("mvtec", "unet_ae", categories=categories)
+    run_experiment("mvtec", "vanilla_vae", categories=categories)
+    run_experiment("mvtec", "unet_vae", categories=categories)
 
-    # run("mvtec", "stfpm", categories=categories)
-    # run("mvtec", "fastflow", categories=categories)
-    # run("mvtec", "draem", categories=categories)
-    # run("mvtec", "efficientad", categories=categories)
+    # run_experiment("mvtec", "stfpm", categories=categories)
+    # run_experiment("mvtec", "fastflow", categories=categories)
+    # run_experiment("mvtec", "draem", categories=categories)
+    # run_experiment("mvtec", "efficientad", categories=categories)

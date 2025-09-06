@@ -93,9 +93,13 @@ MODELER_REGISTRY = {
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from trainer import ReconstructionTrainer, EarlyStopper
+from trainer import DistillationTrainer, FlowTrainer, MemoryTrainer
 
 TRAINER_REGISTRY = {
     "reconstruction": ReconstructionTrainer,
+    "distillation": DistillationTrainer,
+    "flow": FlowTrainer,
+    "memory": MemoryTrainer,
 }
 
 OPTIMIZER_REGISTRY = {

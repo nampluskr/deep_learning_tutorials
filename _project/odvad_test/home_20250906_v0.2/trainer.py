@@ -53,7 +53,7 @@ class BaseTrainer(ABC):
         self.stopper = stopper
         self.logger = logger
         self.metric_names = self.modeler.get_metric_names()
-
+        
     def fit(self, train_loader, num_epochs, valid_loader=None):
         """Complete training loop with validation."""
         history = {'loss': []}
@@ -137,13 +137,37 @@ class BaseTrainer(ABC):
     # Separated Epoch Methods
     # ===================================================================
 
-    @abstractmethod
     def train_epoch(self, train_loader, epoch, num_epochs):
-        """Paradigm-specific training logic."""
-        pass
+        """Training epoch for training monitoring (with Backpropagation)."""
+        total_loss = 0.0
+        total_metrics = {name: 0.0 for name in self.metric_names}
+        num_batches = 0
+
+        desc = f"Train [{epoch}/{num_epochs}]"
+        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                batch_results = self.modeler.train_step(inputs, self.optimizer)
+
+                total_loss += batch_results['loss']
+                for metric_name in self.metric_names:
+                    if metric_name in batch_results:
+                        total_metrics[metric_name] += batch_results[metric_name]
+
+                num_batches += 1
+                avg_loss = total_loss / num_batches
+                avg_metrics = {name: total_metrics[name] / num_batches
+                             for name in self.metric_names}
+
+                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
+                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
+
+        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
+        results.update({name: total_metrics[name] / num_batches
+                       for name in self.metric_names})
+        return results
 
     def validation_epoch(self, data_loader):
-        """Validation epoch for training monitoring."""
+        """Validation epoch for training monitoring.(without Backpropagation)."""
         total_loss = 0.0
         total_metrics = {name: 0.0 for name in self.metric_names}
         num_batches = 0
@@ -307,134 +331,26 @@ class BaseTrainer(ABC):
 class ReconstructionTrainer(BaseTrainer):
     """Trainer for reconstruction-based anomaly detection models."""
 
-    def train_epoch(self, train_loader, epoch, num_epochs):
-        """Training epoch with reconstruction loss optimization."""
-        total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.metric_names}
-        num_batches = 0
-
-        desc = f"Train [{epoch}/{num_epochs}]"
-        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Reconstruction-specific training step
-                batch_results = self.modeler.train_step(inputs, self.optimizer)
-
-                total_loss += batch_results['loss']
-                for metric_name in self.metric_names:
-                    if metric_name in batch_results:
-                        total_metrics[metric_name] += batch_results[metric_name]
-
-                num_batches += 1
-                avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches
-                             for name in self.metric_names}
-
-                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
-                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
-
-        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches
-                       for name in self.metric_names})
-        return results
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
 
 
 class DistillationTrainer(BaseTrainer):
     """Trainer for distillation-based anomaly detection models."""
 
-    def train_epoch(self, train_loader, epoch, num_epochs):
-        """Training epoch with feature distillation loss optimization."""
-        total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.metric_names}
-        num_batches = 0
-
-        desc = f"Train [{epoch}/{num_epochs}]"
-        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Distillation-specific training step
-                batch_results = self.modeler.train_step(inputs, self.optimizer)
-
-                total_loss += batch_results['loss']
-                for metric_name in self.metric_names:
-                    if metric_name in batch_results:
-                        total_metrics[metric_name] += batch_results[metric_name]
-
-                num_batches += 1
-                avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches
-                             for name in self.metric_names}
-
-                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
-                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
-
-        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches
-                       for name in self.metric_names})
-        return results
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
 
 
 class FlowTrainer(BaseTrainer):
     """Trainer for normalizing flow-based anomaly detection models."""
 
-    def train_epoch(self, train_loader, epoch, num_epochs):
-        """Training epoch with likelihood maximization optimization."""
-        total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.metric_names}
-        num_batches = 0
-
-        desc = f"Train [{epoch}/{num_epochs}]"
-        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Flow-specific training step
-                batch_results = self.modeler.train_step(inputs, self.optimizer)
-
-                total_loss += batch_results['loss']
-                for metric_name in self.metric_names:
-                    if metric_name in batch_results:
-                        total_metrics[metric_name] += batch_results[metric_name]
-
-                num_batches += 1
-                avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches
-                             for name in self.metric_names}
-
-                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
-                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
-
-        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches
-                       for name in self.metric_names})
-        return results
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
 
 
 class MemoryTrainer(BaseTrainer):
     """Trainer for memory-based anomaly detection models."""
 
-    def train_epoch(self, train_loader, epoch, num_epochs):
-        """Training epoch for memory bank construction."""
-        total_loss = 0.0
-        total_metrics = {name: 0.0 for name in self.metric_names}
-        num_batches = 0
-
-        desc = f"Memory [{epoch}/{num_epochs}]"
-        with tqdm(train_loader, desc=desc, leave=False, ascii=True) as pbar:
-            for inputs in pbar:
-                # Memory-specific training step (feature extraction)
-                batch_results = self.modeler.train_step(inputs, self.optimizer)
-
-                total_loss += batch_results.get('loss', 0.0)
-                for metric_name in self.metric_names:
-                    if metric_name in batch_results:
-                        total_metrics[metric_name] += batch_results[metric_name]
-
-                num_batches += 1
-                avg_loss = total_loss / num_batches
-                avg_metrics = {name: total_metrics[name] / num_batches
-                             for name in self.metric_names}
-
-                pbar.set_postfix({'loss': f"{avg_loss:.3f}",
-                    **{name: f"{value:.3f}" for name, value in avg_metrics.items()}})
-
-        results = {'loss': total_loss / num_batches if num_batches > 0 else 0.0}
-        results.update({name: total_metrics[name] / num_batches
-                       for name in self.metric_names})
-        return results
+    def __init__(self, modeler, optimizer, scheduler=None, stopper=None, logger=None):
+        super().__init__(modeler, optimizer, scheduler, stopper, logger)
