@@ -10,37 +10,9 @@ from torch.utils.data import Dataset, DataLoader, Subset, random_split, ConcatDa
 from torchvision.transforms import v2
 
 
-def load_image(path, mode='RGB'):
-    """Load image as tensor [C,H,W], float32, normalized to [0,1] range."""
-
-    ext = os.path.splitext(path)[1].lower()
-    if ext in ['.jpg', '.jpeg', '.png']:
-        if mode == 'RGB':
-            img = torchvision.io.read_image(path, mode=torchvision.io.ImageReadMode.RGB)
-        else:  # mode == 'L' (grayscale)
-            img = torchvision.io.read_image(path, mode=torchvision.io.ImageReadMode.GRAY)
-        return img.float() / 255.0
-
-    # Fallback to skimage for other formats (e.g., BMP, TIFF)
-    else:
-        img = skimage.io.imread(path, as_gray=(mode == 'L'))
-
-        # Handle different data types
-        if img.dtype == bool:
-            img = img.astype(np.uint8) * 255
-        elif img.dtype in [np.float32, np.float64]:
-            if img.max() <= 1.0:
-                img = (img * 255).astype(np.uint8)
-
-        # Convert to PyTorch tensor and rearrange dimensions
-        if img.ndim == 2:  # Grayscale image
-            img = torch.from_numpy(img).unsqueeze(0).float()  # [1, H, W]
-        else:  # RGB image
-            img = torch.from_numpy(img).permute(2, 0, 1).float()  # [C, H, W]
-
-        # Normalize to [0, 1] if pixel values are in [0, 255]
-        return img / 255.0 if img.max() > 1.0 else img
-
+# ===================================================================
+# Transforms
+# ===================================================================
 
 class TrainTransform:
     def __init__(self, img_size=256, **params):
@@ -146,7 +118,7 @@ class BaseDataloader:
 
 
 # ===================================================================
-# MVTec Dataloader
+# MVTec DataSet
 # ===================================================================
 
 class MVTecDataset(Dataset):
@@ -206,6 +178,43 @@ class MVTecDataset(Dataset):
     def normal_count(self):
         return len(self.labels) - self.anomaly_count
 
+
+def load_image(path, mode='RGB'):
+    """Load image as tensor [C,H,W], float32, normalized to [0,1] range."""
+
+    ext = os.path.splitext(path)[1].lower()
+    if ext in ['.jpg', '.jpeg', '.png']:
+        if mode == 'RGB':
+            img = torchvision.io.read_image(path, mode=torchvision.io.ImageReadMode.RGB)
+        else:  # mode == 'L' (grayscale)
+            img = torchvision.io.read_image(path, mode=torchvision.io.ImageReadMode.GRAY)
+        return img.float() / 255.0
+
+    # Fallback to skimage for other formats (e.g., BMP, TIFF)
+    else:
+        img = skimage.io.imread(path, as_gray=(mode == 'L'))
+
+        # Handle different data types
+        if img.dtype == bool:
+            img = img.astype(np.uint8) * 255
+        elif img.dtype in [np.float32, np.float64]:
+            if img.max() <= 1.0:
+                img = (img * 255).astype(np.uint8)
+
+        # Convert to PyTorch tensor and rearrange dimensions
+        if img.ndim == 2:  # Grayscale image
+            img = torch.from_numpy(img).unsqueeze(0).float()  # [1, H, W]
+        else:  # RGB image
+            img = torch.from_numpy(img).permute(2, 0, 1).float()  # [C, H, W]
+
+        # Normalize to [0, 1] if pixel values are in [0, 255]
+        return img / 255.0 if img.max() > 1.0 else img
+
+
+
+# ===================================================================
+# MVTec Dataloader
+# ===================================================================
 
 class MVTecDataloader(BaseDataloader):
     def __init__(self, data_dir, categories,
