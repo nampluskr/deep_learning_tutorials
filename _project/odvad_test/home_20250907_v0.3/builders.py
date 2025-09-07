@@ -94,6 +94,7 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from trainer import ReconstructionTrainer, EarlyStopper
 from trainer import DistillationTrainer, FlowTrainer, MemoryTrainer
+from trainer import AdamWithClipping
 
 TRAINER_REGISTRY = {
     "reconstruction": ReconstructionTrainer,
@@ -105,10 +106,17 @@ TRAINER_REGISTRY = {
 OPTIMIZER_REGISTRY = {
     "adam": optim.Adam,
     "adamw": optim.AdamW,
+    "sgd": optim.SGD,
+    "rmsprop": optim.RMSprop,
+    "adam_clip": AdamWithClipping,
 }
 
 SCHEDULER_REGISTRY = {
     "plateau": lr_scheduler.ReduceLROnPlateau,
+    "cosine": lr_scheduler.CosineAnnealingLR,
+    "exponential": lr_scheduler.ExponentialLR,
+    "multistep": lr_scheduler.MultiStepLR,
+    "step": lr_scheduler.StepLR,
 }
 
 STOPPER_REGISTRY = {

@@ -79,48 +79,74 @@ DATA_CONFIGS = {
 
 MODEL_CONFIGS = {
     "default": SimpleNamespace(
-        # Training configuration (common training settings)
         trainer_type="reconstruction",
         optimizer_type="adamw",
-        optimizer_params=dict(lr=1e-4, weight_decay=1e-5),
+        optimizer_params=dict(lr=1e-3, weight_decay=1e-2),
         scheduler_type="plateau",
-        scheduler_params=dict(),
+        scheduler_params=dict(factor=0.5, patience=3, min_lr=1e-7),
         stopper_type="early",
         stopper_params=dict(patience=5, min_delta=1e-4),
-
-        # Model configuration (common model settings)
+        num_epochs=10,  # Default for testing
+        metric_list=[("psnr", dict())],
         model_params=dict(),
         loss_params=dict(),
-        metric_list=[("psnr", dict())],  # Default metric for reconstruction quality
     ),
 
-    # AutoEncoder family models
+    # AutoEncoder family - 충분한 epochs + early stopping
     "vanilla_ae": SimpleNamespace(
         modeler_type="ae",
         model_type="vanilla_ae",
         loss_type="ae",
+        num_epochs=100,  # 50 → 100 (early stopping으로 실제로는 30-40에서 종료 예상)
+        optimizer_type="adamw",
+        optimizer_params=dict(lr=5e-4, weight_decay=1e-3),
+        scheduler_type="step",
+        scheduler_params=dict(step_size=15, gamma=0.5),
+        stopper_type="early",
+        stopper_params=dict(patience=8, min_delta=1e-4),
     ),
 
     "unet_ae": SimpleNamespace(
         modeler_type="ae",
         model_type="unet_ae",
         loss_type="ae",
+        num_epochs=120,  # 60 → 120 (UNet은 좀 더 복잡하므로)
+        optimizer_type="rmsprop",
+        optimizer_params=dict(lr=1e-3, alpha=0.99, weight_decay=1e-5),
+        scheduler_type="multistep",
+        scheduler_params=dict(milestones=[30, 60, 90], gamma=0.3),  # milestone도 조정
+        stopper_type="early",
+        stopper_params=dict(patience=10, min_delta=1e-4),
     ),
 
-    # Variational AutoEncoder family models
+    # VAE family - KL divergence 안정화를 위해 더 많은 epochs
     "vanilla_vae": SimpleNamespace(
         modeler_type="vae",
         model_type="vanilla_vae",
         loss_type="vae",
+        num_epochs=150,  # 80 → 150 (VAE는 더 긴 훈련 필요할 수 있음)
+        optimizer_type="adam_clip",
+        optimizer_params=dict(lr=5e-4, max_grad_norm=1.0),
+        scheduler_type="cosine",
+        scheduler_params=dict(T_max=150, eta_min=1e-6),  # T_max도 조정
+        stopper_type="early",
+        stopper_params=dict(patience=15, min_delta=5e-5),  # patience도 증가
     ),
 
     "unet_vae": SimpleNamespace(
         modeler_type="vae",
         model_type="unet_vae",
         loss_type="vae",
+        num_epochs=180,  # 100 → 180
+        optimizer_type="adam_clip",
+        optimizer_params=dict(lr=3e-4, max_grad_norm=1.0),
+        scheduler_type="cosine",
+        scheduler_params=dict(T_max=180, eta_min=1e-6),
+        stopper_type="early",
+        stopper_params=dict(patience=20, min_delta=5e-5),
     ),
 
-    # Feature distillation models
+    # Feature distillation - Teacher-Student 안정화를 위해 충분한 epochs
     "stfpm": SimpleNamespace(
         modeler_type="stfpm",
         model_type="stfpm",
@@ -129,40 +155,57 @@ MODEL_CONFIGS = {
             backbone="resnet50",
             layers=["layer1", "layer2", "layer3"]
         ),
+        num_epochs=200,  # 100 → 200
+        optimizer_type="sgd",
+        optimizer_params=dict(lr=1e-2, momentum=0.9, weight_decay=1e-4),
+        scheduler_type="multistep",
+        scheduler_params=dict(milestones=[60, 120, 160], gamma=0.1),  # milestone 조정
+        stopper_type="early",
+        stopper_params=dict(patience=25, min_delta=1e-5),  # patience 증가
         metric_list=[("feature_sim", dict(similarity_fn='cosine'))],
     ),
 
-    # Normalizing flow models - requires special optimizer settings
+    # Normalizing flow - early stopping 없이 full epochs (변경 없음)
     "fastflow": SimpleNamespace(
         modeler_type="fastflow",
         model_type="fastflow",
         loss_type="fastflow",
         model_params=dict(
-            backbone="wide_resnet50_2",  # Wide ResNet for better flow performance
+            backbone="wide_resnet50_2",
             flow_steps=8,
             conv3x3_only=False,
             hidden_ratio=1.0,
         ),
-        # FastFlow requires very low learning rate
-        optimizer_params=dict(lr=1e-5, weight_decay=1e-5),
-        stopper_params=dict(patience=10, min_delta=1e-5),  # More patience for flow models
+        num_epochs=200,  # 150 → 200 (early stopping 없으므로 적당히 증가)
+        optimizer_type="rmsprop",
+        optimizer_params=dict(lr=1e-3, alpha=0.99, weight_decay=1e-5),
+        scheduler_type="exponential",
+        scheduler_params=dict(gamma=0.99),
+        stopper_type="none",  # No early stopping
         metric_list=[("likelihood", dict())],
     ),
 
-    # Synthetic anomaly generation models - can use AUROC/AUPR during training
+    # Synthetic anomaly generation
     "draem": SimpleNamespace(
         modeler_type="draem",
         model_type="draem",
         loss_type="draem",
         model_params=dict(sspcab=False),
-        metric_list=[("auroc", dict()), ("aupr", dict())],  # Can use anomaly metrics
+        num_epochs=150,  # 80 → 150
+        optimizer_type="adam",
+        optimizer_params=dict(lr=1e-4, betas=(0.5, 0.999), weight_decay=0),
+        scheduler_type="multistep",
+        scheduler_params=dict(milestones=[50, 100, 130], gamma=0.5),  # milestone 조정
+        stopper_type="early",
+        stopper_params=dict(patience=20, min_delta=1e-5),  # patience 증가
+        metric_list=[("auroc", dict()), ("aupr", dict())],
     ),
 
-    # Self-supervised knowledge distillation models
+    # Knowledge distillation - early stopping 없이 full epochs
     "efficientad": SimpleNamespace(
         modeler_type="efficientad",
         model_type="efficientad",
-        loss_type=None,  # Self-computed loss in the model
+        loss_type=None,
         model_params=dict(
             model_size="small",
             teacher_out_channels=384,
@@ -170,11 +213,16 @@ MODEL_CONFIGS = {
             pad_maps=True,
             use_imagenet_penalty=True,
         ),
-        optimizer_params=dict(lr=1e-3, weight_decay=1e-4),  # Higher LR for distillation
+        num_epochs=100,  # 70 → 100
+        optimizer_type="adamw",
+        optimizer_params=dict(lr=1e-3, weight_decay=1e-2),
+        scheduler_type="cosine",
+        scheduler_params=dict(T_max=100, eta_min=1e-6),  # T_max 조정
+        stopper_type="early",
+        stopper_params=dict(patience=15, min_delta=1e-5),
         metric_list=[("feature_sim", dict(similarity_fn='cosine'))],
     ),
 }
-
 
 # ===================================================================
 # Config Utilities
@@ -203,14 +251,20 @@ def merge_configs(destination, source):
         source = copy.deepcopy(source)
     
     for key, value in source.__dict__.items():
-        if key.endswith("_params") and hasattr(destination, key):
+        if key == "dataloader_params" and hasattr(destination, key):
+            # dataloader_params만 병합(merge)
             existing_params = getattr(destination, key)
             if isinstance(existing_params, dict) and isinstance(value, dict):
                 existing_params.update(value)
             else:
                 setattr(destination, key, value)
-        else:
+        elif key.endswith("_params") and hasattr(destination, key):
+            # 다른 _params는 치환(replace)
             setattr(destination, key, value)
+        else:
+            # 일반 속성은 치환
+            setattr(destination, key, value)
+    
     return destination
 
 

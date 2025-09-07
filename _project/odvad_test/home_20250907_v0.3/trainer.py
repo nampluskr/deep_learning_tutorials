@@ -40,6 +40,23 @@ class EarlyStopper:
         return False
 
 
+# Custom Adam with gradient clipping
+class AdamWithClipping(optim.Adam):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
+                 weight_decay=0, amsgrad=False, max_grad_norm=1.0):
+        super().__init__(params, lr, betas, eps, weight_decay, amsgrad)
+        self.max_grad_norm = max_grad_norm
+
+    def step(self, closure=None):
+        # Apply gradient clipping before optimization step
+        if self.max_grad_norm > 0:
+            params = []
+            for group in self.param_groups:
+                params.extend([p for p in group['params'] if p.grad is not None])
+            torch.nn.utils.clip_grad_norm_(params, self.max_grad_norm)
+        return super().step(closure)
+
+
 class BaseTrainer(ABC):
     """Base trainer with separated epoch methods for different model paradigms."""
 

@@ -476,13 +476,13 @@ def show_results(results, logger=None):
 if __name__ == "__main__":
 
     temp = dict(num_epochs=5, dataloader_params=dict(categories=['bottle']))
-    
-    # run_experiment("mvtec", "vanilla_ae", temp.copy())
-    # run_experiment("mvtec", "unet_ae", temp.copy())
-    # run_experiment("mvtec", "vanilla_vae", temp.copy())
-    # run_experiment("mvtec", "unet_vae", temp.copy())
 
-    # run_experiment("mvtec", "stfpm", temp.copy())
+    run_experiment("mvtec", "vanilla_ae", temp.copy())
+    run_experiment("mvtec", "unet_ae", temp.copy())
+    run_experiment("mvtec", "vanilla_vae", temp.copy())
+    run_experiment("mvtec", "unet_vae", temp.copy())
+
+    run_experiment("mvtec", "stfpm", temp.copy())
     run_experiment("mvtec", "fastflow", temp.copy())
     run_experiment("mvtec", "draem", temp.copy())
     run_experiment("mvtec", "efficientad", temp.copy())
