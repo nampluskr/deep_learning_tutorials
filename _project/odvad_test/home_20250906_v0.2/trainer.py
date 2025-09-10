@@ -113,7 +113,7 @@ class BaseTrainer(ABC):
         self.model.eval()
         return self.predict_epoch(test_loader)
 
-    def test(self, test_loader, threshold_method="f1"):
+    def test(self, test_loader, threshold_method="percentile"):
         """Academic evaluation with comprehensive metrics."""
         self.model.eval()
         predictions = self.test_epoch(test_loader)

@@ -97,6 +97,10 @@ MODEL_CONFIGS = {
         modeler_type="ae",
         model_type="vanilla_ae",
         loss_type="ae",
+        model_params=dict(
+            backbone="resnet50",
+            layers=["layer1", "layer2", "layer3"]
+        ),
         num_epochs=100,  # 50 → 100 (early stopping으로 실제로는 30-40에서 종료 예상)
         optimizer_type="adamw",
         optimizer_params=dict(lr=5e-4, weight_decay=1e-3),
@@ -110,6 +114,10 @@ MODEL_CONFIGS = {
         modeler_type="ae",
         model_type="unet_ae",
         loss_type="ae",
+        model_params=dict(
+            backbone="resnet50",
+            layers=["layer1", "layer2", "layer3"]
+        ),
         num_epochs=120,  # 60 → 120 (UNet은 좀 더 복잡하므로)
         optimizer_type="rmsprop",
         optimizer_params=dict(lr=1e-3, alpha=0.99, weight_decay=1e-5),
@@ -124,6 +132,10 @@ MODEL_CONFIGS = {
         modeler_type="vae",
         model_type="vanilla_vae",
         loss_type="vae",
+        model_params=dict(
+            backbone="resnet50",
+            layers=["layer1", "layer2", "layer3"]
+        ),
         num_epochs=150,  # 80 → 150 (VAE는 더 긴 훈련 필요할 수 있음)
         optimizer_type="adam_clip",
         optimizer_params=dict(lr=5e-4, max_grad_norm=1.0),
@@ -137,6 +149,10 @@ MODEL_CONFIGS = {
         modeler_type="vae",
         model_type="unet_vae",
         loss_type="vae",
+        model_params=dict(
+            backbone="resnet50",
+            layers=["layer1", "layer2", "layer3"]
+        ),
         num_epochs=180,  # 100 → 180
         optimizer_type="adam_clip",
         optimizer_params=dict(lr=3e-4, max_grad_norm=1.0),
@@ -165,7 +181,7 @@ MODEL_CONFIGS = {
         metric_list=[("feature_sim", dict(similarity_fn='cosine'))],
     ),
 
-    # Normalizing flow - early stopping 없이 full epochs (변경 없음)
+    # Normalizing flow - early stopping 없이 full epochs
     "fastflow": SimpleNamespace(
         modeler_type="fastflow",
         model_type="fastflow",

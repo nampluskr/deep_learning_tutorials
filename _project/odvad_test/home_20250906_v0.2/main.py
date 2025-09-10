@@ -477,13 +477,13 @@ def show_results(results, logger=None):
 
 if __name__ == "__main__":
 
-    categories=["bottle"]
-    # run_experiment("mvtec", "vanilla_ae", categories=categories)
+    categories=["bottle", "tile", "grid"]
+    run_experiment("mvtec", "vanilla_ae", categories=categories)
     # run_experiment("mvtec", "unet_ae", categories=categories)
     run_experiment("mvtec", "vanilla_vae", categories=categories)
-    run_experiment("mvtec", "unet_vae", categories=categories)
+    # run_experiment("mvtec", "unet_vae", categories=categories)
 
-    # run_experiment("mvtec", "stfpm", categories=categories)
-    # run_experiment("mvtec", "fastflow", categories=categories)
-    # run_experiment("mvtec", "draem", categories=categories)
-    # run_experiment("mvtec", "efficientad", categories=categories)
+    run_experiment("mvtec", "stfpm", categories=categories)
+    run_experiment("mvtec", "fastflow", categories=categories)
+    run_experiment("mvtec", "draem", categories=categories)
+    run_experiment("mvtec", "efficientad", categories=categories)
