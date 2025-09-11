@@ -35,18 +35,20 @@ if __name__ == "__main__":
 
     config = get_config()
 
-    # 1. Data loaders    
+    # 1. Data Loading
     train_loader, test_loader = get_dataloaders(
         config.data_dir, config.category, config.batch_size, config.img_size)
 
-    # 2. Model
+    # 2. Modeling
     model = VanillaAE(latent_dim=config.latent_dim).to(config.device)
     loss_fn = nn.MSELoss()
     optimizer = optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
+    # 3. Training
     trainer = BaseTrainer(model, optimizer, loss_fn)
     history = trainer.fit(train_loader, num_epochs=config.num_epochs)
 
+    # 4. Evaluation
     scores, labels = trainer.predict(test_loader)
     show_evaluation(scores, labels)
     show_statistics(scores, labels)
