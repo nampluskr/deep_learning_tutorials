@@ -118,8 +118,6 @@ All backbone weights verified in: /home/namu/myspace/NAMU/project_2025/backbones
 ==================================================
 RUNNING EXPERIMENT: STFPM
 ==================================================
-/opt/conda/lib/python3.10/site-packages/torchvision/transforms/v2/_deprecated.py:41: UserWarning: The transform `ToTensor()` is deprecated and will be removed in a future release. Instead, please use `v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])`.
-  warnings.warn(
 
  > Dataset Type:      /home/namu/myspace/NAMU/datasets/mvtec
  > Categories:        ['grid']
@@ -144,34 +142,38 @@ RUNNING EXPERIMENT: STFPM
  > Logger:            None
 
  > Training started...
- [ 1/100] loss=2.069, feature_sim=0.828 (5.9s)                                                            
- [ 2/100] loss=1.170, feature_sim=0.903 (3.6s)                                                            
- [ 3/100] loss=0.909, feature_sim=0.924 (3.6s)                                                            
- [ 4/100] loss=0.761, feature_sim=0.937 (3.5s)
+ [ 1/100] loss=2.111, feature_sim=0.824 (6.5s)                                                            
+ [ 2/100] loss=1.230, feature_sim=0.898 (4.1s)                                                            
+ [ 3/100] loss=0.930, feature_sim=0.922 (3.7s)                                                            
+ [ 4/100] loss=0.760, feature_sim=0.937 (3.7s)                                                            
+ [ 5/100] loss=0.673, feature_sim=0.944 (3.8s)  
 ... 
- [93/100] loss=0.228, feature_sim=0.981 (4.5s)                                                            
- [94/100] loss=0.226, feature_sim=0.981 (4.2s)                                                            
- [95/100] loss=0.221, feature_sim=0.982 (4.9s)                                                            
- [96/100] loss=0.220, feature_sim=0.982 (4.4s)                                                            
- [97/100] loss=0.215, feature_sim=0.982 (4.2s)                                                            
- [98/100] loss=0.213, feature_sim=0.982 (3.8s)                                                            
- [99/100] loss=0.220, feature_sim=0.982 (3.6s)                                                            
- [100/100] loss=0.218, feature_sim=0.982 (3.7s)                                                           
+ [90/100] loss=0.232, feature_sim=0.981 (4.4s)                                                            
+ [91/100] loss=0.235, feature_sim=0.980 (4.2s)                                                            
+ [92/100] loss=0.226, feature_sim=0.981 (4.9s)                                                            
+ [93/100] loss=0.225, feature_sim=0.981 (4.8s)                                                            
+ [94/100] loss=0.231, feature_sim=0.981 (4.5s)                                                            
+ [95/100] loss=0.229, feature_sim=0.981 (3.8s)                                                            
+ [96/100] loss=0.224, feature_sim=0.981 (3.6s)                                                            
+ [97/100] loss=0.220, feature_sim=0.982 (3.8s)                                                            
+ [98/100] loss=0.233, feature_sim=0.981 (3.7s)                                                            
+ [99/100] loss=0.223, feature_sim=0.981 (3.8s)                                                            
+ [100/100] loss=0.226, feature_sim=0.981 (3.5s)                                                           
  > Training completed!
 ------------------------------------------------------------                                              
 EXPERIMENT RESULTS
 ------------------------------------------------------------
- > AUROC:             0.8129
- > AUPR:              0.9361
- > Threshold:         9.143e-06
+ > AUROC:             0.7794
+ > AUPR:              0.9243
+ > Threshold:         7.804e-06
 ------------------------------------------------------------
- > Accuracy:          0.7821
- > Precision:         0.9348
- > Recall:            0.7544
- > F1-Score:          0.8350
+ > Accuracy:          0.7564
+ > Precision:         0.9524
+ > Recall:            0.7018
+ > F1-Score:          0.8081
 ------------------------------------------------------------
                    Predicted
    Actual    Normal  Anomaly
-   Normal        18        3
-   Anomaly       14       43
+   Normal        19        2
+   Anomaly       17       40
 ```
