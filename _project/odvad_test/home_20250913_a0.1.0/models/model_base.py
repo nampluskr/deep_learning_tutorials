@@ -24,8 +24,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-BACKBONE_DIR = os.path.abspath(os.path.join("..", "..", "backbones"))
-
+BACKBONE_DIR = '/mnt/d/backbones'
 BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
     "resnet34": "resnet34-b627a593.pth",
