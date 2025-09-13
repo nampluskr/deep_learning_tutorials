@@ -109,15 +109,36 @@ class FeatureSimilarityMetric(nn.Module):
 
     def forward(self, teacher_features, student_features):
         """Compute similarity between teacher and student features."""
+        # Handle dictionary of features (multi-layer) - 이 부분이 핵심!
+        if isinstance(teacher_features, dict) and isinstance(student_features, dict):
+            similarities = []
+            for layer in teacher_features:
+                if layer in student_features:
+                    teacher_feat = teacher_features[layer]
+                    student_feat = student_features[layer]
+                    sim = self._compute_layer_similarity(teacher_feat, student_feat)
+                    similarities.append(sim)
+            
+            return sum(similarities) / len(similarities) if similarities else 0.0
+        else:
+            # Handle single tensor case
+            return self._compute_layer_similarity(teacher_features, student_features)
+    
+    def _compute_layer_similarity(self, teacher_feat, student_feat):
+        """Compute similarity for a single layer."""
         if self.similarity_fn == 'cosine':
-            teacher_norm = F.normalize(teacher_features, dim=1)
-            student_norm = F.normalize(student_features, dim=1)
+            # Flatten spatial dimensions and compute global average
+            teacher_flat = teacher_feat.flatten(2).mean(dim=2)  # [B, C]
+            student_flat = student_feat.flatten(2).mean(dim=2)  # [B, C]
+            
+            teacher_norm = F.normalize(teacher_flat, dim=1)
+            student_norm = F.normalize(student_flat, dim=1)
             similarity = F.cosine_similarity(teacher_norm, student_norm, dim=1)
             return torch.mean(similarity).item()
         
         elif self.similarity_fn == 'mse':
-            mse = F.mse_loss(teacher_features, student_features, reduction='mean')
-            return mse.item()
+            mse = F.mse_loss(teacher_feat, student_feat, reduction='mean')
+            return -mse.item()  # Negative MSE (higher is better)
         
         else:
             raise ValueError(f"Unknown similarity function: {self.similarity_fn}")

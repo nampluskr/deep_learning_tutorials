@@ -1,7 +1,7 @@
 import torch
 from torch import optim
 
-from .modeler_base import BaseModeler
+from modeler_base import BaseModeler
 
 
 class STFPMModeler(BaseModeler):
@@ -80,21 +80,9 @@ class STFPMModeler(BaseModeler):
     def predict_step(self, inputs):
         self.model.eval()
         inputs = self.to_device(inputs)
-
         predictions = self.model(inputs['image'])
+        return predictions['pred_score']
 
-        # Inference mode: InferenceBatch(pred_score, anomaly_map)
-        if isinstance(predictions, dict) and 'pred_score' in predictions:
-            return predictions['pred_score']
-        else:
-            # Fallback: if training mode output
-            teacher_features, student_features = predictions
-            # Compute feature difference as anomaly score
-            total_diff = 0
-            for layer in teacher_features:
-                diff = torch.mean((teacher_features[layer] - student_features[layer]) ** 2, dim=[1, 2, 3])
-                total_diff += diff
-            return total_diff
 
     def compute_anomaly_scores(self, inputs):
         self.model.eval()

@@ -149,6 +149,7 @@ class BaseTrainer(ABC):
         self.stopper = stopper
         self.logger = logger
         self.metric_names = self.modeler.get_metric_names()
+        self.device = next(self.model.parameters()).device
 
     def log(self, message, level='info'):
         """Unified logging interface"""
@@ -187,16 +188,62 @@ class BaseTrainer(ABC):
                 return True
         return False
 
+    # @torch.no_grad()
+    # def predict(self, test_loader):
+    #     self.model.eval()
+    #     all_scores, all_labels = [], []
+
+    #     with tqdm(test_loader, desc="Predict", leave=False, ascii=True) as pbar:
+    #         for i, inputs in enumerate(pbar):
+    #             images = inputs['image'].to(self.device)
+                
+    #             predictions = self.model(images)
+    #             scores = predictions['pred_score']
+                
+    #             # 디버깅 코드 추가
+    #             if i == 0:  # 첫 번째 배치만
+    #                 print(f"[GradientTrainer] Model type: {type(self.model)}")
+    #                 print(f"[GradientTrainer] Model training: {self.model.training}")
+    #                 print(f"[GradientTrainer] Input shape: {images.shape}")
+    #                 print(f"[GradientTrainer] Predictions type: {type(predictions)}")
+    #                 print(f"[GradientTrainer] Score shape: {scores.shape}")
+    #                 print(f"[GradientTrainer] Score sample: {scores[:5].flatten()}")
+                    
+    #                 # anomaly_map도 확인
+    #                 if 'anomaly_map' in predictions:
+    #                     amap = predictions['anomaly_map']
+    #                     print(f"[GradientTrainer] Anomaly map shape: {amap.shape}")
+    #                     print(f"[GradientTrainer] Anomaly map max: {amap.max():.6f}")
+
+    # @torch.no_grad()
+    # def predict(self, test_loader):
+    #     """Common predict functionality for all trainers"""
+    #     self.model.eval()
+    #     all_scores, all_labels = [], []
+
+    #     desc = "Predict"
+    #     with tqdm(test_loader, desc=desc, leave=False, ascii=True) as pbar:
+    #         for inputs in pbar:
+    #             scores = self.modeler.predict_step(inputs)
+    #             labels = inputs["label"]
+
+    #             all_scores.append(scores.cpu())
+    #             all_labels.append(labels.cpu())
+
+    #     scores_tensor = torch.cat(all_scores, dim=0)
+    #     labels_tensor = torch.cat(all_labels, dim=0)
+    #     return scores_tensor, labels_tensor
+    
     @torch.no_grad()
     def predict(self, test_loader):
-        """Common predict functionality for all trainers"""
         self.model.eval()
         all_scores, all_labels = [], []
 
-        desc = "Predict"
-        with tqdm(test_loader, desc=desc, leave=False, ascii=True) as pbar:
+        with tqdm(test_loader, desc="Predict", leave=False, ascii=True) as pbar:
             for inputs in pbar:
-                scores = self.modeler.predict_step(inputs)
+                images = inputs['image'].to(self.device)
+                predictions = self.model(images)
+                scores = predictions['pred_score']
                 labels = inputs["label"]
 
                 all_scores.append(scores.cpu())
@@ -205,6 +252,7 @@ class BaseTrainer(ABC):
         scores_tensor = torch.cat(all_scores, dim=0)
         labels_tensor = torch.cat(all_labels, dim=0)
         return scores_tensor, labels_tensor
+    
 
     def save_model(self, path):
         """Save model state"""

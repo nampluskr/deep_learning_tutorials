@@ -212,6 +212,18 @@ class STFPMTrainer(BaseTrainer):
                     for metric_name, metric_fn in self.metrics.items():
                         metric_val = metric_fn(teacher_features, student_features)
                         batch_results[metric_name] = float(metric_val)
+                        
+                    with torch.no_grad():
+                        for metric_name, metric_fn in self.metrics.items():
+                            if metric_name == "feat_sim":
+                                similarities = []
+                                for layer in teacher_features:
+                                    if layer in student_features:
+                                        layer_sim = metric_fn(teacher_features[layer], student_features[layer])
+                                        similarities.append(layer_sim)
+                                batch_results[metric_name] = sum(similarities) / len(similarities) if similarities else 0.0
+                            else:
+                                batch_results[metric_name] = 0.0
 
                 total_loss += batch_results["loss"]
                 for name in self.metric_names:
@@ -226,6 +238,52 @@ class STFPMTrainer(BaseTrainer):
         results = {"loss": total_loss / max(num_batches, 1)}
         results.update({n: total_metrics[n] / max(num_batches, 1) for n in self.metric_names})
         return results
+
+    # @torch.no_grad()
+    # def predict(self, test_loader):
+    #     self.model.eval()
+    #     all_scores, all_labels = [], []
+
+    #     with tqdm(test_loader, desc="Predict", leave=False, ascii=True) as pbar:
+    #         for i, inputs in enumerate(pbar):
+    #             images = inputs['image'].to(self.device)
+                
+    #             predictions = self.model(images)
+    #             scores = predictions['pred_score']
+                
+    #             # 디버깅 코드 추가
+    #             if i == 0:  # 첫 번째 배치만
+    #                 print(f"[GradientTrainer] Model type: {type(self.model)}")
+    #                 print(f"[GradientTrainer] Model training: {self.model.training}")
+    #                 print(f"[GradientTrainer] Input shape: {images.shape}")
+    #                 print(f"[GradientTrainer] Predictions type: {type(predictions)}")
+    #                 print(f"[GradientTrainer] Score shape: {scores.shape}")
+    #                 print(f"[GradientTrainer] Score sample: {scores[:5].flatten()}")
+                    
+    #                 # anomaly_map도 확인
+    #                 if 'anomaly_map' in predictions:
+    #                     amap = predictions['anomaly_map']
+    #                     print(f"[GradientTrainer] Anomaly map shape: {amap.shape}")
+    #                     print(f"[GradientTrainer] Anomaly map max: {amap.max():.6f}")
+    
+    @torch.no_grad()
+    def predict(self, test_loader):
+        self.model.eval()
+        all_scores, all_labels = [], []
+
+        with tqdm(test_loader, desc="Predict", leave=False, ascii=True) as pbar:
+            for inputs in pbar:
+                images = inputs['image'].to(self.device)
+                predictions = self.model(images)
+                scores = predictions['pred_score']
+                labels = inputs["label"]
+
+                all_scores.append(scores.cpu())
+                all_labels.append(labels.cpu())
+
+        scores_tensor = torch.cat(all_scores, dim=0)
+        labels_tensor = torch.cat(all_labels, dim=0)
+        return scores_tensor, labels_tensor
 
 
 # class EfficientADTrainer(BaseTrainer):
