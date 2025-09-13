@@ -33,62 +33,12 @@ class DeconvBlock(nn.Module):
 # Vanilla AutoEncoder
 # =============================================================================
 
-# class VanillaEncoder(nn.Module):
-#     def __init__(self, in_channels=3, latent_dim=512):
-#         super().__init__()
-#         self.conv_blocks = nn.Sequential(
-#             ConvBlock(in_channels, 32),
-#             ConvBlock(32, 64),
-#             ConvBlock(64, 128),
-#             ConvBlock(128, 256),
-#             ConvBlock(256, 512),
-#         )
-#         self.pool = nn.AdaptiveAvgPool2d((1, 1))
-#         self.fc = nn.Linear(512, latent_dim)
-
-#     def forward(self, x):
-#         features = self.conv_blocks(x)
-#         pooled = self.pool(features)
-#         pooled = pooled.view(pooled.size(0), -1)
-#         latent = self.fc(pooled)
-#         return latent, features
-
-
-# class VanillaDecoder(nn.Module):
-#     def __init__(self, out_channels=3, latent_dim=512, img_size=256):
-#         super().__init__()
-#         self.img_size = img_size
-
-#         # Safety check for encoder's downsampling factor (5 ConvBlocks with stride=2 -> /32)
-#         if self.img_size % 32 != 0:
-#             raise ValueError(f"img_size must be divisible by 32, got {self.img_size}")
-
-#         self.start_size = self.img_size // 32  # Encoder downsampling factor (5 conv blocks)
-
-#         self.fc = nn.Linear(latent_dim, 512 * self.start_size * self.start_size)
-#         self.unflatten = nn.Unflatten(1, (512, self.start_size, self.start_size))
-
-#         layers = [
-#             DeconvBlock(512, 256),
-#             DeconvBlock(256, 128),
-#             DeconvBlock(128, 64),
-#             DeconvBlock(64, 32),
-#             nn.ConvTranspose2d(32, out_channels, kernel_size=4, stride=2, padding=1),
-#             # nn.Sigmoid(),
-#         ]
-#         self.deconv_blocks = nn.Sequential(*layers)
-
-#     def forward(self, latent):
-#         x = self.fc(latent)
-#         x = self.unflatten(x)
-#         reconstructed = self.deconv_blocks(x)
-#         return reconstructed
-
 class VanillaEncoder(nn.Module):
-    def __init__(self, in_channels=3, latent_dim=1024):
+    """Vanilla encoder with consistent latent dimension."""
+    def __init__(self, in_channels=3, latent_dim=512):
         super().__init__()
         self.layers = nn.ModuleList([
-            ConvBlock(in_channels, 64),               # 256 -> 128
+            ConvBlock(in_channels, 64),     # 256 -> 128
             ConvBlock(64, 128),             # 128 -> 64
             ConvBlock(128, 256),            # 64  -> 32
             ConvBlock(256, 512),            # 32  -> 16
@@ -96,7 +46,7 @@ class VanillaEncoder(nn.Module):
         ])
 
     def forward(self, x):
-        features = []   # [f0, f1, f2, f3, f4]   # f0: 64‑ch, f4: deepest (512‑ch)
+        features = []   # [f0, f1, f2, f3, f4]   # f0: 64ch, f4: deepest (latent_dim ch)
         outputs = x
         for i, layer in enumerate(self.layers):
             outputs = layer(outputs)
@@ -107,6 +57,7 @@ class VanillaEncoder(nn.Module):
 
 
 class VanillaDecoder(nn.Module):
+    """Vanilla decoder with consistent latent dimension."""
     def __init__(self, out_channels=3, latent_dim=512):
         super().__init__()
         self.layers = nn.Sequential(
@@ -121,8 +72,8 @@ class VanillaDecoder(nn.Module):
         return self.layers(latent)
 
 
-
 class VanillaAE(nn.Module):
+    """Vanilla AutoEncoder with unified latent dimension."""
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512):
         super().__init__()
         self.encoder = VanillaEncoder(in_channels, latent_dim)
@@ -147,7 +98,12 @@ class VanillaAE(nn.Module):
         return anomaly_map
 
 
+# =============================================================================
+# UNet AutoEncoder
+# =============================================================================
+
 class UNetEncoder(nn.Module):
+    """UNet encoder with skip connections."""
     def __init__(self, in_channels=3, latent_dim=512):
         super().__init__()
         self.conv1 = ConvBlock(in_channels, 32)    # /2
@@ -175,6 +131,7 @@ class UNetEncoder(nn.Module):
 
 
 class UNetDecoder(nn.Module):
+    """UNet decoder with skip connections."""
     def __init__(self, out_channels=3, latent_dim=512, img_size=256):
         super().__init__()
         self.img_size = img_size
@@ -191,7 +148,6 @@ class UNetDecoder(nn.Module):
         self.deconv3 = DeconvBlock(128 + 128, 64)                      # /4
         self.deconv4 = DeconvBlock(64 + 64, 32)                        # /2
         self.deconv5 = nn.ConvTranspose2d(32 + 32, out_channels, 4, 2, 1)  # /1
-        # self.final_activation = nn.Sigmoid()
 
     def forward(self, latent, skip_connections):
         x = self.fc(latent)
@@ -202,12 +158,12 @@ class UNetDecoder(nn.Module):
         d3 = self.deconv3(torch.cat([d2, skip_connections[2]], dim=1)) # 64,  H/4
         d4 = self.deconv4(torch.cat([d3, skip_connections[1]], dim=1)) # 32,  H/2
         d5 = self.deconv5(torch.cat([d4, skip_connections[0]], dim=1)) # C,   H/1
-        # reconstructed = self.final_activation(d5)
         reconstructed = d5
         return reconstructed
 
 
 class UNetAE(nn.Module):
+    """UNet AutoEncoder with skip connections."""
     def __init__(self, in_channels=3, out_channels=3, latent_dim=512, img_size=256):
         super().__init__()
         self.encoder = UNetEncoder(in_channels, latent_dim)
@@ -232,7 +188,12 @@ class UNetAE(nn.Module):
         return anomaly_map
 
 
+# =============================================================================
+# Loss Functions
+# =============================================================================
+
 class AELoss(nn.Module):
+    """Basic MSE loss for AutoEncoder."""
     def __init__(self, reduction='mean'):
         super().__init__()
         self.reduction = reduction
@@ -242,6 +203,7 @@ class AELoss(nn.Module):
 
 
 class AECombinedLoss(nn.Module):
+    """Combined MSE and SSIM loss for AutoEncoder."""
     def __init__(self, mse_weight=0.7, ssim_weight=0.3, reduction='mean'):
         super().__init__()
         self.mse_weight = mse_weight
@@ -252,21 +214,31 @@ class AECombinedLoss(nn.Module):
         # MSE loss
         mse_loss = F.mse_loss(reconstructed, original, reduction=self.reduction)
 
-        # SSIM loss (requires sssim.py from pytorch_msssim library)
+        # SSIM loss (requires ssim.py from pytorch_msssim library)
         ssim_val = ssim(reconstructed, original, data_range=1.0, size_average=(self.reduction == 'mean'))
         ssim_loss = 1 - ssim_val
         return self.mse_weight * mse_loss + self.ssim_weight * ssim_loss
 
 
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
 def compute_ae_anomaly_map(original, reconstructed):
+    """Compute anomaly map for AutoEncoder."""
     anomaly_map = torch.mean((original - reconstructed) ** 2, dim=1, keepdim=True)
     return anomaly_map
 
 
 def compute_ae_anomaly_scores(original, reconstructed):
+    """Compute anomaly scores for AutoEncoder."""
     scores = torch.mean((original - reconstructed) ** 2, dim=[1, 2, 3])
     return scores
 
+
+# =============================================================================
+# Metrics
+# =============================================================================
 
 class SSIMMetric(nn.Module):
     """Structural Similarity Index Measure metric."""
@@ -278,7 +250,6 @@ class SSIMMetric(nn.Module):
     def forward(self, preds, targets):
         ssim_value = ssim(preds, targets, data_range=self.data_range, size_average=True)
         return ssim_value.item()
-
 
 
 if __name__ == "__main__":

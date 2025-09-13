@@ -15,14 +15,8 @@ try:
 except ImportError:
     HAS_TORCHVISION_FEATURE_EXTRACTION = False
 
-try:
-    from torch.fx.graph_module import GraphModule
-    HAS_TORCH_FX = True
-except ImportError:
-    HAS_TORCH_FX = False
 
 logger = logging.getLogger(__name__)
-
 
 BACKBONE_DIR = '/mnt/d/backbones'
 BACKBONE_WEIGHT_FILES = {
@@ -32,8 +26,15 @@ BACKBONE_WEIGHT_FILES = {
     "wide_resnet50_2": "wide_resnet50_2-95faca4d.pth",
     "efficientnet_b0": "efficientnet_b0_ra-3dd342df.pth",
     "vgg16": "vgg16-397923af.pth",
-    "alexnet": "alexnet-owt-7be5be79.pth", 
+    "alexnet": "alexnet-owt-7be5be79.pth",
     "squeezenet1_1": "squeezenet1_1-b8a52dc0.pth",
+    # EfficientAD weights
+    "efficientad_teacher_small": "pretrained_teacher_small.pth",
+    "efficientad_teacher_medium": "pretrained_teacher_medium.pth",
+    # LPIPS weights
+    "lpips_alex": "lpips_alex.pth",
+    "lpips_vgg": "lpips_vgg.pth",
+    "lpips_squeeze": "lpips_squeeze.pth"
 }
 
 
@@ -49,6 +50,33 @@ def get_local_weight_path(backbone):
         return os.path.join(BACKBONE_DIR, filename)  # 전역 변수 사용
     else:
         return os.path.join(BACKBONE_DIR, f"{backbone}.pth")
+
+
+def check_backbone_files(backbone_dir=None):
+    """Check if backbone files exist in the directory"""
+    if backbone_dir is None:
+        backbone_dir = BACKBONE_DIR
+
+    print(f" > Checking backbone directory: {backbone_dir}")
+    if not os.path.exists(backbone_dir):
+        print(f" > Warning: Backbone directory not found: {backbone_dir}")
+        print(f" > Continuing with random initialization...")
+        return False
+
+    required_files = list(BACKBONE_WEIGHT_FILES.values())
+    missing_files = []
+    for file in required_files:
+        full_path = os.path.join(backbone_dir, file)
+        if not os.path.exists(full_path):
+            missing_files.append(file)
+
+    if missing_files:
+        print(f" > Warning: Missing backbone files: {missing_files}")
+        print(f" > Continuing with random initialization...")
+        return False
+
+    print(f" > All backbone weights verified in: {backbone_dir}")
+    return True
 
 
 def dryrun_find_featuremap_dims(feature_extractor, input_size, layers):
