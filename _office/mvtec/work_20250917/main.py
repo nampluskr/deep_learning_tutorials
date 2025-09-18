@@ -1,7 +1,7 @@
 ```python
 import torch
-from test_autoencoder import get_config, get_dataloaders, AutoEncoder
-from test_autoencoder import model_test
+from autoencoder import get_config, get_dataloaders, AutoEncoder
+from autoencoder import model_test
 ```
 
 ```python
