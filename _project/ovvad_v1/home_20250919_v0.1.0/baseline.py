@@ -32,7 +32,7 @@ def get_config(category="tile"):
         num_epochs=20,
         learning_rate= 1e-4,
         latent_dim=512,
-        output_dir="./experiments"
+        output_dir="./baseline"
     )
     config.weight_path = os.path.join(config.output_dir,
         f"model_{config.category}_{config.model_type}_epochs-{config.num_epochs}.pth")
