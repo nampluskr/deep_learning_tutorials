@@ -35,8 +35,8 @@ def get_config(model_type, category, num_epochs=20):
         data_root="/home/namu/myspace/NAMU/datasets/mvtec",
         category=category,
         img_size=256,
-        batch_size=4,
-        num_workers=1,
+        batch_size=8,
+        num_workers=8,
         pin_memory=True,
         persistent_workers=False,
         seed=42,
@@ -96,8 +96,8 @@ if __name__ == "__main__":
     # run_experiment(trainer, config)
 
     from model_patchcore import PatchCore, PatchCoreTrainer
-    config = get_config("patchcore", category, num_epochs)
-    config.batch_size=2
+    config = get_config("patchcore", category, num_epochs=1)
+    config.batch_size=8
     trainer = PatchCoreTrainer(PatchCore(layers=["layer2", "layer3"], 
         backbone="wide_resnet50_2", pre_trained=True), config)
     run_experiment(trainer, config)
