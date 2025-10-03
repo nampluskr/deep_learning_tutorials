@@ -153,6 +153,36 @@ def run_fastflow(dataset, category, num_epochs=10):
     trainer = FastFlowTrainer(model)
     run_experiment(trainer, config)
 
+def run_csflow(dataset, category, num_epochs=10):
+    from model_csflow import CSFlow, CSFlowTrainer
+
+    config = get_config("csflow", dataset, category, num_epochs)
+    config.imagenet_normalize = True
+    config.batch_size = 8
+    set_seed(seed=config.seed)
+    model = CSFlow(input_size=(256, 256),
+            cross_conv_hidden_channels=1024, n_coupling_blocks=4, clamp=3, num_channels=3)
+    trainer = CSFlowTrainer(model)
+    run_experiment(trainer, config)
+
+
+def run_uflow(dataset, category, num_epochs=10):
+    from model_uflow import UFlow, UFlowTrainer
+
+    config = get_config("uflow", dataset, category, num_epochs)
+    config.img_size = 448
+    config.imagenet_normalize = True
+    config.batch_size = 8
+    set_seed(seed=config.seed)
+    model = UFlow(input_size=(448, 448),
+            backbone="wide_resnet50_2",
+            flow_steps=4,
+            affine_clamp=2.0,
+            affine_subnet_channels_ratio=1.0,
+            permute_soft=False,
+        )
+    trainer = UFlowTrainer(model)
+    run_experiment(trainer, config)
 
 if __name__ == "__main__":
 
@@ -164,6 +194,8 @@ if __name__ == "__main__":
     # run_efficientad_medium(dataset, category, num_epochs=10)
     # run_patchcore(dataset, category)
     # run_cflow(dataset, category, num_epochs=10)
-    run_fastflow(dataset, category, num_epochs=10)
+    # run_fastflow(dataset, category, num_epochs=10)
+    # run_csflow(dataset, category, num_epochs=10)
+    run_uflow(dataset, category, num_epochs=10)
 
 
