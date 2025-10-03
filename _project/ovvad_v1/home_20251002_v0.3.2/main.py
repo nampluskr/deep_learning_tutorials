@@ -49,7 +49,7 @@ def get_config(model_type, dataset, category, num_epochs=20):
         num_epochs=num_epochs,
         img_name=f"img_{dataset}_{category}_{model_type}_epochs-{num_epochs}",
         weight_name=f"model_{dataset}_{category}_{model_type}_epochs-{num_epochs}.pth",
-        output_dir=os.path.join(".", dataset, category, model_type),
+        output_dir=os.path.join("/mnt/d/outputs", dataset, category, model_type),
     )
     config.weight_path=os.path.join(config.output_dir, config.weight_name)
     config.imagenet_normalize = False if model_type.startswith("efficientad") else True
@@ -130,28 +130,28 @@ def run_patchcore(dataset, category):
     run_experiment(trainer, config)
 
 
-def run_cflow(dataset, category):
+def run_cflow(dataset, category, num_epochs=10):
     from model_cflow import CFlow, CFlowTrainer
 
-    config = get_config("cflow-resnet50", dataset, category, num_epochs=1)
+    config = get_config("cflow-resnet50", dataset, category, num_epochs)
     config.imagenet_normalize = True
-    config.batch_size = 8
+    config.batch_size = 4
     set_seed(seed=config.seed)
     model = CFlow(backbone="resnet50", layers=["layer1", "layer2", "layer3"])
     trainer = CFlowTrainer(model)
     run_experiment(trainer, config)
 
 
-# def run_fastflow(dataset, category):
-#     from model_fastflow import FastFlow, FastFlowTrainer
+def run_fastflow(dataset, category, num_epochs=10):
+    from model_fastflow import FastFlow, FastFlowTrainer
 
-#     config = get_config("fastflow-resnet50", dataset, category, num_epochs=1)
-#     config.imagenet_normalize = True
-#     config.batch_size = 8
-#     set_seed(seed=config.seed)
-#     model = FastFlow(input_size=(256, 256), backbone="wide_resnet50_2")
-#     trainer = FastFlowTrainer(model)
-#     run_experiment(trainer, config)
+    config = get_config("fastflow-resnet50", dataset, category, num_epochs)
+    config.imagenet_normalize = True
+    config.batch_size = 8
+    set_seed(seed=config.seed)
+    model = FastFlow(input_size=(256, 256), backbone="wide_resnet50_2")
+    trainer = FastFlowTrainer(model)
+    run_experiment(trainer, config)
 
 
 if __name__ == "__main__":
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # run_efficientad_small(dataset, category, num_epochs=10)
     # run_efficientad_medium(dataset, category, num_epochs=10)
     # run_patchcore(dataset, category)
-    run_cflow(dataset, category)
-    # run_fastflow(dataset, category)
+    # run_cflow(dataset, category, num_epochs=10)
+    run_fastflow(dataset, category, num_epochs=10)
 
 
