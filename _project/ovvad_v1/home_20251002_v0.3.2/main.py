@@ -193,9 +193,9 @@ if __name__ == "__main__":
     # run_efficientad_small(dataset, category, num_epochs=10)
     # run_efficientad_medium(dataset, category, num_epochs=10)
     # run_patchcore(dataset, category)
-    # run_cflow(dataset, category, num_epochs=10)
+    run_cflow(dataset, category, num_epochs=10)
     # run_fastflow(dataset, category, num_epochs=10)
     # run_csflow(dataset, category, num_epochs=10)
-    run_uflow(dataset, category, num_epochs=10)
+    # run_uflow(dataset, category, num_epochs=10)
 
 
