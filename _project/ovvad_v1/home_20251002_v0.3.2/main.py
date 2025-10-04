@@ -74,50 +74,9 @@ def run_experiment(trainer, config):
         skip_anomaly=True, num_max=10, imagenet_normalize=config.imagenet_normalize)
 
 
-def run_autoencoder(dataset, category, num_epochs=10):
-    from model_autoencoder import AutoEncoder, AutoEncoderTrainer
-
-    config = get_config("autoencoder", dataset, category, num_epochs)
-    config.imagenet_normalize = False
-    config.batch_size = 16
-    set_seed(seed=config.seed)
-    model=AutoEncoder(latent_dim=256, img_size=config.img_size)
-    trainer = AutoEncoderTrainer(model)
-    run_experiment(trainer, config)
-
-
-def run_stfpm(dataset, category, num_epochs=10):
-    from model_stfpm import STFPM, STFPMTrainer
-
-    config = get_config("stfpm-resnet50", dataset, category, num_epochs)
-    config.imagenet_normalize = True
-    config.batch_size=16
-    set_seed(seed=config.seed)
-    trainer = STFPMTrainer(STFPM(backbone="resnet50", layers=["layer1", "layer2", "layer3"]))
-    run_experiment(trainer, config)
-
-
-def run_efficientad_small(dataset, category, num_epochs=3):
-    from model_efficientad import EfficientAD, EfficientADTrainer
-
-    config = get_config("efficientad-small", dataset, category, num_epochs)
-    config.imagenet_normalize = False
-    config.batch_size=1
-    set_seed(seed=config.seed)
-    trainer = EfficientADTrainer(EfficientAD(model_size="small"))
-    run_experiment(trainer, config)
-
-
-def run_efficientad_medium(dataset, category, num_epochs=3):
-    from model_efficientad import EfficientAD, EfficientADTrainer
-
-    config = get_config("efficientad-medium", dataset, category, num_epochs)
-    config.imagenet_normalize = False
-    config.batch_size=1
-    set_seed(seed=config.seed)
-    trainer = EfficientADTrainer(EfficientAD(model_size="medium"))
-    run_experiment(trainer, config)
-
+#############################################################
+## 1. Memory-based (3): PaDim(2020), PatchCore(2022), DFKDE(2022)
+#############################################################
 
 def run_patchcore(dataset, category):
     from model_patchcore import PatchCore, PatchCoreTrainer
@@ -129,6 +88,35 @@ def run_patchcore(dataset, category):
     trainer = PatchCoreTrainer(PatchCore(layers=["layer2", "layer3"], backbone="wide_resnet50_2"))
     run_experiment(trainer, config)
 
+def run_padim(dataset, category):
+    from model_padim import PaDim, PaDimTrainer
+
+    config = get_config("padim", dataset, category, num_epochs=1)
+    config.imagenet_normalize = True
+    config.batch_size=8
+    set_seed(seed=config.seed)
+    trainer = PaDimTrainer(PaDim(backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"],
+            pre_trained=True, n_features=None))
+    run_experiment(trainer, config)
+
+def run_dfkde(dataset, category):
+    from model_dfkde import DFKDE, DFKDETrainer, FeatureScalingMethod
+
+    config = get_config("dfkde", dataset, category, num_epochs=1)
+    config.imagenet_normalize = True
+    config.batch_size=8
+    set_seed(seed=config.seed)
+    trainer = DFKDETrainer(DFKDE(layers=["layer4"],
+            backbone="wide_resnet50_2",
+            pre_trained=True,
+            n_pca_components=16,
+            feature_scaling_method=FeatureScalingMethod.SCALE,
+            max_training_points=40000))
+    run_experiment(trainer, config)
+
+#############################################################
+## 2. Nomalizing Flow-based (4): CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
+#############################################################
 
 def run_cflow(dataset, category, num_epochs=10):
     from model_cflow import CFlow, CFlowTrainer
@@ -184,18 +172,175 @@ def run_uflow(dataset, category, num_epochs=10):
     trainer = UFlowTrainer(model)
     run_experiment(trainer, config)
 
+
+#############################################################
+# 3. Knowledge Distillation (4): STFPM(2021), FRE(2023), Reverse Distillation(2022), EfficientAD(2024)
+#############################################################
+
+def run_stfpm(dataset, category, num_epochs=10):
+    from model_stfpm import STFPM, STFPMTrainer
+
+    config = get_config("stfpm-resnet50", dataset, category, num_epochs)
+    config.imagenet_normalize = True
+    config.batch_size=16
+    set_seed(seed=config.seed)
+    trainer = STFPMTrainer(STFPM(backbone="resnet50", layers=["layer1", "layer2", "layer3"]))
+    run_experiment(trainer, config)
+
+def run_fre(dataset, category, num_epochs=10):
+    from model_fre import FRE, FRETrainer
+
+    config = get_config("fre-resnet50", dataset, category, num_epochs)
+    config.imagenet_normalize = True
+    config.batch_size=16
+    set_seed(seed=config.seed)
+    trainer = FRETrainer(FRE(
+            backbone="resnet50",
+            pre_trained=True,
+            layer="layer3",
+            pooling_kernel_size=2,
+            input_dim=65536,
+            latent_dim=220,
+        ))
+    run_experiment(trainer, config)
+
+def run_reverse_distillation(dataset, category, num_epochs=10):
+    from model_reverse_distillation import ReverseDistillation, ReverseDistillationTrainer, AnomalyMapGenerationMode
+
+    config = get_config("reverse-distillation", dataset, category, num_epochs)
+    config.imagenet_normalize = True
+    config.batch_size=16
+    set_seed(seed=config.seed)
+    trainer = ReverseDistillationTrainer(ReverseDistillation(
+            backbone="wide_resnet50_2",
+            pre_trained=True,
+            layers=["layer1", "layer2", "layer3"],
+            input_size=(256, 256),
+            anomaly_map_mode=AnomalyMapGenerationMode.ADD,
+        ))
+    run_experiment(trainer, config)
+
+def run_efficientad_small(dataset, category, num_epochs=3):
+    from model_efficientad import EfficientAD, EfficientADTrainer
+
+    config = get_config("efficientad-small", dataset, category, num_epochs)
+    config.imagenet_normalize = False
+    config.batch_size=1
+    set_seed(seed=config.seed)
+    trainer = EfficientADTrainer(EfficientAD(model_size="small"))
+    run_experiment(trainer, config)
+
+
+def run_efficientad_medium(dataset, category, num_epochs=3):
+    from model_efficientad import EfficientAD, EfficientADTrainer
+
+    config = get_config("efficientad-medium", dataset, category, num_epochs)
+    config.imagenet_normalize = False
+    config.batch_size=1
+    set_seed(seed=config.seed)
+    trainer = EfficientADTrainer(EfficientAD(model_size="medium"))
+    run_experiment(trainer, config)
+
+
+#############################################################
+## 4. Reconstruction-based (4): AutoEncoder(Baseline), GANomaly(2018), DRAEM(2021), DSR(2022)
+#############################################################
+
+def run_autoencoder(dataset, category, num_epochs=10):
+    from model_autoencoder import AutoEncoder, AutoEncoderTrainer
+
+    config = get_config("autoencoder", dataset, category, num_epochs)
+    config.imagenet_normalize = False
+    config.batch_size = 16
+    set_seed(seed=config.seed)
+    model=AutoEncoder(latent_dim=256, img_size=config.img_size)
+    trainer = AutoEncoderTrainer(model)
+    run_experiment(trainer, config)
+
+def run_ganomaly(dataset, category, num_epochs=100):
+    from model_ganomaly import GANomaly, GANomalyTrainer
+
+    config = get_config("ganomaly", dataset, category, num_epochs)
+    config.imagenet_normalize = True
+    config.batch_size = 8
+    set_seed(seed=config.seed)
+    model = GANomaly(
+        input_size=(config.img_size, config.img_size),
+        num_input_channels=3,
+        n_features=64,
+        latent_vec_size=100,
+        extra_layers=0,
+        add_final_conv_layer=True
+    )
+    trainer = GANomalyTrainer(model=model)
+    run_experiment(trainer, config)
+
+def run_draem(dataset, category, num_epochs=10):
+    from model_draem import DRAEM, DRAEMTrainer
+
+    config = get_config("draem", dataset, category, num_epochs)
+    config.imagenet_normalize = False
+    config.batch_size = 4
+    set_seed(seed=config.seed)
+    model = DRAEM(sspcab=True)
+    trainer = DRAEMTrainer(model=model)
+    run_experiment(trainer, config)
+
+
+def run_dsr(dataset, category, num_epochs=10):
+    from model_dsr import DSR, DSRTrainer
+
+    config = get_config("dsr", dataset, category, num_epochs)
+    config.imagenet_normalize = False
+    config.batch_size = 8
+    set_seed(seed=config.seed)
+    model = DSR(
+        latent_anomaly_strength=0.2,
+        embedding_dim=128,
+        num_embeddings=4096,
+        num_hiddens=128,
+        num_residual_layers=2,
+        num_residual_hiddens=64
+    )
+    trainer = DSRTrainer(model=model)
+    run_experiment(trainer, config)
+
 if __name__ == "__main__":
 
-    dataset, category = "mvtec", "tile"
+    dataset, category = "mvtec", "grid"
 
-    # run_autoencoder(dataset, category, num_epochs=50)
-    # run_stfpm(dataset, category, num_epochs=50)
-    # run_efficientad_small(dataset, category, num_epochs=10)
-    # run_efficientad_medium(dataset, category, num_epochs=10)
+    #############################################################
+    ## 1. Memory-based (3): PaDim(2020), PatchCore(2022), DFKDE(2022)
+    #############################################################
+
     # run_patchcore(dataset, category)
-    run_cflow(dataset, category, num_epochs=10)
+    # run_padim(dataset, category)
+    # run_dfkde(dataset, category)
+
+    #############################################################
+    ## 2. Nomalizing Flow-based (4): CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
+    #############################################################
+
+    # run_cflow(dataset, category, num_epochs=10)
     # run_fastflow(dataset, category, num_epochs=10)
     # run_csflow(dataset, category, num_epochs=10)
     # run_uflow(dataset, category, num_epochs=10)
 
+    #############################################################
+    # 3. Knowledge Distillation (4): STFPM(2021), FRE(2023), Reverse Distillation(2022), EfficientAD(2024)
+    #############################################################
 
+    # run_stfpm(dataset, category, num_epochs=20)
+    # run_fre(dataset, category, num_epochs=20)
+    # run_reverse_distillation(dataset, category, num_epochs=10)
+    # run_efficientad_small(dataset, category, num_epochs=10)
+    # run_efficientad_medium(dataset, category, num_epochs=10)
+
+    #############################################################
+    # 4. Reconstruction-based (4): AutoEncoder(Baseline), GANomaly(2018), DRAEM(2021), DSR(2022)
+    #############################################################
+
+    # run_autoencoder(dataset, category, num_epochs=50)
+    # run_ganomaly(dataset, category, num_epochs=20)
+    # run_draem(dataset, category, num_epochs=20)
+    run_dsr(dataset, category, num_epochs=10)
