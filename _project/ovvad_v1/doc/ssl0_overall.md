@@ -118,6 +118,7 @@
 수작업으로 설계한 **Pretext Task**를 푸는 과정에서 표현을 학습한다.
 
 **기본 수식**:
+
 $$\min_\theta \mathbb{E}_{\mathbf{x}} \mathcal{L}_{\text{CE}}(g_\theta(T(\mathbf{x})), t)$$
 
 여기서:
@@ -155,6 +156,7 @@ $$\min_\theta \mathbb{E}_{\mathbf{x}} \mathcal{L}_{\text{CE}}(g_\theta(T(\mathbf
 특징 공간에서 **자동 클러스터링**하여 pseudo-label 생성.
 
 **기본 수식**:
+
 $$\text{Cluster: } \mathbf{c}_i = \text{K-means}(\{f_\theta(\mathbf{x}_j)\})$$
 $$\text{Train: } \min_\theta \mathcal{L}_{\text{CE}}(f_\theta(\mathbf{x}_i), \mathbf{c}_i)$$
 
@@ -236,6 +238,7 @@ DINOv2 (2023, 86%) - Large-scale
 **유사한 샘플은 가깝게, 다른 샘플은 멀게**.
 
 **InfoNCE Loss**:
+
 $$\mathcal{L} = -\log \frac{\exp(\text{sim}(\mathbf{z}_i, \mathbf{z}_i^+)/\tau)}{\exp(\text{sim}(\mathbf{z}_i, \mathbf{z}_i^+)/\tau) + \sum_{j}\exp(\text{sim}(\mathbf{z}_i, \mathbf{z}_j^-)/\tau)}$$
 
 #### 3.3.2 주요 모델
@@ -278,6 +281,7 @@ MoCo v3 (2021, 76%) - ViT
 **Masked Image Modeling (MIM)**: 이미지 일부 마스킹 → 복원.
 
 **기본 수식**:
+
 $$\min_\theta \|\mathbf{x}_{\text{masked}} - f_\theta(\mathbf{x}_{\text{visible}})\|^2$$
 
 #### 3.4.2 주요 모델
