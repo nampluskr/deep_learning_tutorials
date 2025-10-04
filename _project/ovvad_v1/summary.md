@@ -602,6 +602,67 @@ Feature adaptation 방법론은 pre-trained 특징을 타겟 도메인에 맞게
 
 Anomalib 라이브러리는 2018년부터 2025년까지의 이상 탐지 연구 발전을 포괄적으로 담고 있다. Memory-based, Normalizing Flow, Knowledge Distillation, Reconstruction, Foundation Model 등 다양한 패러다임이 공존하며, 각각 고유한 장단점을 가진다. 실무 적용 시에는 정확도, 속도, 메모리, 학습 데이터 가용성, 설명 가능성 등 다차원적 요구사항을 고려하여 최적의 모델을 선택해야 한다. 특히 2024-2025년의 foundation model 기반 방법론들은 이상 탐지의 패러다임을 zero-shot/few-shot 방향으로 전환하고 있으며, 이는 향후 산업 적용에서 중요한 트렌드가 될 것으로 전망된다.
 
+### 7.5 최종 추천 의사결정 플로우
+
+```
+Step 1: 정확도 vs 속도 우선순위?
+│
+├─ 최고 정확도 필수 (>99%)
+│   └─ Single-class → PatchCore
+│   └─ Multi-class → Dinomaly
+│
+├─ 실시간 처리 필수 (<10ms)
+│   └─ EfficientAd (유일한 선택)
+│
+└─ 균형 필요
+    └─ Step 2로
+
+Step 2: 학습 데이터 상황?
+│
+├─ 데이터 없음 (0장)
+│   └─ WinCLIP (zero-shot)
+│
+├─ 적은 데이터 (10-50장)
+│   └─ DRAEM (few-shot)
+│
+└─ 충분한 데이터 (100+ 장)
+    └─ Step 3으로
+
+Step 3: 특수 요구사항?
+│
+├─ Multi-class 환경
+│   └─ Dinomaly ★★★★★
+│
+├─ 설명 필요 (보고서, 교육)
+│   └─ VLM-AD
+│
+├─ 복잡한 텍스처
+│   └─ DSR
+│
+├─ Domain shift 큼
+│   └─ CFA
+│
+└─ 일반적 상황
+    ├─ 속도 중시 → FastFlow
+    ├─ 정확도 중시 → PatchCore
+    └─ 균형 → Reverse Distillation
+```
+
+### 7.6 2025년 현재 Best Practices
+
+**Top 3 권장 모델**:
+1. **Dinomaly**: Multi-class 환경의 새로운 표준
+2. **EfficientAd**: 실시간 처리의 유일한 해답
+3. **PatchCore**: Single-class 최고 정확도
+
+**상황별 Best Pick**:
+- 대부분의 경우: **Dinomaly** (98.8%, multi-class 가능)
+- 실시간 라인: **EfficientAd** (97.8%, 1-5ms)
+- 신제품/프로토타입: **WinCLIP** (91-95%, zero-shot)
+- 품질 보고서: **VLM-AD** (96-97%, explainable)
+
+## 8. 테이블 요약
+
 ---
 
 ### 테이블 1: Memory-Based 방식 핵심 비교
@@ -634,10 +695,11 @@ Anomalib 라이브러리는 2018년부터 2025년까지의 이상 탐지 연구 
 | 모델 | 발표연도 | 핵심 혁신 | AUROC | 속도 | 메모리 | 주요 장점 | 주요 단점 | 추천도 |
 |------|----------|----------|-------|------|--------|----------|----------|--------|
 | **STFPM** | 2021 | Feature Pyramid Matching | 96.8% | 20-40ms | 500MB-1GB | 간단, 빠름 | 중간 성능 | ★★★★☆ |
+| **FRE** | 2023 | 경량화 시도 | 95-96% | 10-30ms | 300-500MB | STFPM보다 빠름 | 성능 저하, EfficientAd에 밀림 | ★☆☆☆☆ |
 | **Reverse Distillation** | 2022 | 역방향 증류, One-class | 98.6% | 100-200ms | 500MB-1GB | SOTA 정확도, Localization | 느린 속도 | ★★★★★ |
 | **EfficientAd** | 2024 | 극한 최적화, PDN+AE | 97.8% | 1-5ms | <200MB | 실시간, 엣지 배포 | 최고 정확도 아님 | ★★★★★ |
 
-**핵심 발전**: STFPM의 전통적 KD → Reverse Distillation의 패러다임 역전 → EfficientAd의 실용화
+**핵심 발전**: STFPM → FRE (과도기적 시도) → EfficientAd (혁명적 발전)
 
 ---
 
@@ -751,10 +813,11 @@ Anomalib 라이브러리는 2018년부터 2025년까지의 이상 탐지 연구 
 | **Memory-Based** | PatchCore | 99.1% | 50-100ms | 최고 정확도, 직관적 | 메모리 사용 | 정밀 검사 | ★★★★★ |
 | **Normalizing Flow** | FastFlow | 98.5% | 20-50ms | 확률적 해석, 빠름 | 학습 복잡 | 균형잡힌 응용 | ★★★★★ |
 | **Knowledge Distillation** | Reverse Distillation | 98.6% | 100-200ms | SOTA급, Localization | 느림 | 정밀 검사 | ★★★★★ |
-| **(실시간 특화)** | EfficientAd | 97.8% | 1-5ms | 극한 속도, 엣지 | 최고 정확도 아님 | 실시간/엣지 | ★★★★★ |
+| **(KD - 실시간 특화)** | EfficientAd | 97.8% | 1-5ms | 극한 속도, 엣지 | 최고 정확도 아님 | 실시간/엣지 | ★★★★★ |
+| **(KD - Deprecated)** | FRE | 95-96% | 10-30ms | STFPM보다 빠름 | EfficientAd에 밀림 | **사용 안함** | ★☆☆☆☆ |
 | **Reconstruction** | DRAEM | 97.5% | 50-100ms | Few-shot, 안정적 | Simulation 의존 | Few-shot 상황 | ★★★★☆ |
-| **(텍스처 특화)** | DSR | 96.5-98.0% | 80-120ms | 복잡한 텍스처 | 일반 결함 낮음 | 텍스처 표면 | ★★★☆☆ |
 | **Feature Adaptation** | CFA | 96.5-97.5% | 40-70ms | Domain shift 해결 | 복잡, SOTA 대비 낮음 | 특수 domain | ★★☆☆☆ |
+| **Foundation
 
 ---
 
@@ -879,65 +942,3 @@ Anomalib 라이브러리는 2018년부터 2025년까지의 이상 탐지 연구 
 | **2024** | FM + Explainability | VLM-AD, EfficientAd | 설명 가능 + 실용화 | 96-98% |
 | **2025** | FM 성숙기 | Dinomaly, UniNet | Multi-class SOTA | 98-99% |
 
----
-
-## 결론 및 실무 가이드
-
-### 최종 추천 의사결정 플로우
-
-```
-Step 1: 정확도 vs 속도 우선순위?
-│
-├─ 최고 정확도 필수 (>99%)
-│   └─ Single-class → PatchCore
-│   └─ Multi-class → Dinomaly
-│
-├─ 실시간 처리 필수 (<10ms)
-│   └─ EfficientAd (유일한 선택)
-│
-└─ 균형 필요
-    └─ Step 2로
-
-Step 2: 학습 데이터 상황?
-│
-├─ 데이터 없음 (0장)
-│   └─ WinCLIP (zero-shot)
-│
-├─ 적은 데이터 (10-50장)
-│   └─ DRAEM (few-shot)
-│
-└─ 충분한 데이터 (100+ 장)
-    └─ Step 3으로
-
-Step 3: 특수 요구사항?
-│
-├─ Multi-class 환경
-│   └─ Dinomaly ★★★★★
-│
-├─ 설명 필요 (보고서, 교육)
-│   └─ VLM-AD
-│
-├─ 복잡한 텍스처
-│   └─ DSR
-│
-├─ Domain shift 큼
-│   └─ CFA
-│
-└─ 일반적 상황
-    ├─ 속도 중시 → FastFlow
-    ├─ 정확도 중시 → PatchCore
-    └─ 균형 → Reverse Distillation
-```
-
-### 2025년 현재 Best Practices
-
-**Top 3 권장 모델**:
-1. **Dinomaly**: Multi-class 환경의 새로운 표준
-2. **EfficientAd**: 실시간 처리의 유일한 해답
-3. **PatchCore**: Single-class 최고 정확도
-
-**상황별 Best Pick**:
-- 대부분의 경우: **Dinomaly** (98.8%, multi-class 가능)
-- 실시간 라인: **EfficientAd** (97.8%, 1-5ms)
-- 신제품/프로토타입: **WinCLIP** (91-95%, zero-shot)
-- 품질 보고서: **VLM-AD** (96-97%, explainable)
