@@ -10,7 +10,7 @@ from torchvision import transforms as T
 
 
 class BaseDataset(Dataset):
-    def __init__(self, dataset_dir, category, split="train", transform=None, mask_transform=None):
+    def __init__(self, root_dir, category, split="train", transform=None, mask_transform=None):
         super().__init__()
         self.transform = transform
         self.mask_transform = mask_transform
@@ -19,11 +19,11 @@ class BaseDataset(Dataset):
         self.labels = []
         self.defect_types = []
 
-        self.load_data(dataset_dir, category, split)
+        self.load_data(root_dir, category, split)
         print(f" > {category} - {split} set: {len(self)} images, "
               f"Normal: {self.labels.count(0)}, Anomaly: {self.labels.count(1)}")
 
-    def load_data(self, dataset_dir, category, split):
+    def load_data(self, root_dir, category, split):
         raise NotImplementedError
 
     def __len__(self):
@@ -55,8 +55,8 @@ class BaseDataset(Dataset):
 
 
 class MVTecDataset(BaseDataset):
-    def load_data(self, dataset_dir, category, split):
-        category_dir = os.path.join(dataset_dir, category)
+    def load_data(self, root_dir, category, split):
+        category_dir = os.path.join(root_dir, category)
 
         if split == "train":
             normal_image_dir = os.path.join(category_dir, "train", "good")
@@ -93,8 +93,8 @@ class MVTecDataset(BaseDataset):
 
 
 class VisADataset(BaseDataset):
-    def load_data(self, dataset_dir, category, split="train", test_ratio=0.2):
-        csv_path = os.path.join(dataset_dir, category, "image_anno.csv")
+    def load_data(self, root_dir, category, split="train", test_ratio=0.2):
+        csv_path = os.path.join(root_dir, category, "image_anno.csv")
         df = pd.read_csv(csv_path)
 
         normal_df = df[df["label"] == "normal"].reset_index(drop=True)
@@ -110,7 +110,7 @@ class VisADataset(BaseDataset):
             subset = pd.concat([normal_test, anomaly_df], axis=0).reset_index(drop=True)
 
         for _, row in subset.iterrows():
-            image_path = os.path.join(dataset_dir, row["image"])
+            image_path = os.path.join(root_dir, row["image"])
             defect_type = row["label"]
 
             if defect_type == "normal":
@@ -120,15 +120,15 @@ class VisADataset(BaseDataset):
                 self.defect_types.append("good")
             else:
                 self.image_paths.append(image_path)
-                mask_path = os.path.join(dataset_dir, row["mask"])
+                mask_path = os.path.join(root_dir, row["mask"])
                 self.mask_paths.append(mask_path)
                 self.labels.append(1)
                 self.defect_types.append(str(defect_type))
 
 
 class BTADDataset(BaseDataset):
-    def load_data(self, dataset_dir, category, split):
-        category_dir = os.path.join(dataset_dir, category)
+    def load_data(self, root_dir, category, split):
+        category_dir = os.path.join(root_dir, category)
 
         if split == "train":
             normal_image_dir = os.path.join(category_dir, "train", "ok")
@@ -167,8 +167,8 @@ class BTADDataset(BaseDataset):
                 self.defect_types.append("anomaly")
 
 
-def get_dataloaders(dataset_name, dataset_dir, category, img_size, batch_size,
-                    num_workers=8, pin_memory=True, persistent_workers=True, normalize=True):
+def get_dataloaders(dataset_type, category, root_dir, img_size, batch_size, normalize=True,
+                    num_workers=8, pin_memory=True, persistent_workers=True):
     train_transforms = [
         T.Resize((img_size, img_size), interpolation=T.InterpolationMode.BILINEAR),
         T.ToTensor(),
@@ -190,13 +190,13 @@ def get_dataloaders(dataset_name, dataset_dir, category, img_size, batch_size,
     ])
 
     datasets = {"mvtec": MVTecDataset, "visa": VisADataset, "btad": BTADDataset}
-    DatasetClass = datasets.get(dataset_name.lower())
+    DatasetClass = datasets.get(dataset_type.lower())
     if DatasetClass is None:
-        raise ValueError(f"Unknown dataset: {dataset_name}. Available: {list(datasets.keys())}")
+        raise ValueError(f"Unknown dataset: {dataset_type}. Available: {list(datasets.keys())}")
 
-    train_set = DatasetClass(dataset_dir=dataset_dir, category=category, split="train",
+    train_set = DatasetClass(root_dir=root_dir, category=category, split="train",
         transform=train_transform, mask_transform=mask_transform)
-    test_set = DatasetClass(dataset_dir=dataset_dir, category=category, split="test",
+    test_set = DatasetClass(root_dir=root_dir, category=category, split="test",
         transform=test_transform, mask_transform=mask_transform)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,

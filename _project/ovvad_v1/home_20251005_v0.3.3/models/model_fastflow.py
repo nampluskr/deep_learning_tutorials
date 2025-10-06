@@ -210,20 +210,33 @@ class FastflowModel(nn.Module):
         return [self.norms[i](feature) for i, feature in enumerate(features)]
 
     def _get_cait_features(self, input_tensor: torch.Tensor) -> list[torch.Tensor]:
+        """CaiT feature extraction"""
         feature = self.feature_extractor.patch_embed(input_tensor)
         feature = feature + self.feature_extractor.pos_embed
         feature = self.feature_extractor.pos_drop(feature)
-        for i in range(41):  # paper Table 6. Block Index = 40
+        
+        # Block 0-40까지 통과 (총 41개)
+        for i in range(41):  
             feature = self.feature_extractor.blocks[i](feature)
-        batch_size, _, num_channels = feature.shape
+        
+        # Normalization
         feature = self.feature_extractor.norm(feature)
-        feature = feature.permute(0, 2, 1)
-        feature = feature.reshape(batch_size, num_channels, self.input_size[0] // 16, self.input_size[1] // 16)
+        
+        # Reshape: [B, N, C] -> [B, C, H, W]
+        batch_size, num_patches, num_channels = feature.shape
+        feature = feature.permute(0, 2, 1)  # [B, C, N]
+        
+        # 패치 수에서 spatial size 계산
+        spatial_size = int(num_patches ** 0.5)
+        feature = feature.reshape(batch_size, num_channels, spatial_size, spatial_size)
+        
         return [feature]
 
     def _get_vit_features(self, input_tensor: torch.Tensor) -> list[torch.Tensor]:
+        """DeiT feature extraction"""
         feature = self.feature_extractor.patch_embed(input_tensor)
         cls_token = self.feature_extractor.cls_token.expand(feature.shape[0], -1, -1)
+        
         if self.feature_extractor.dist_token is None:
             feature = torch.cat((cls_token, feature), dim=1)
         else:
@@ -235,14 +248,22 @@ class FastflowModel(nn.Module):
                 ),
                 dim=1,
             )
+        
         feature = self.feature_extractor.pos_drop(feature + self.feature_extractor.pos_embed)
+        
         for i in range(8):  # paper Table 6. Block Index = 7
             feature = self.feature_extractor.blocks[i](feature)
+        
         feature = self.feature_extractor.norm(feature)
-        feature = feature[:, 2:, :]
-        batch_size, _, num_channels = feature.shape
+        feature = feature[:, 2:, :]  # Remove cls and dist tokens
+        
+        batch_size, num_patches, num_channels = feature.shape
         feature = feature.permute(0, 2, 1)
-        feature = feature.reshape(batch_size, num_channels, self.input_size[0] // 16, self.input_size[1] // 16)
+        
+        # 패치 수에서 spatial size 계산
+        spatial_size = int(num_patches ** 0.5)
+        feature = feature.reshape(batch_size, num_channels, spatial_size, spatial_size)
+        
         return [feature]
 
 

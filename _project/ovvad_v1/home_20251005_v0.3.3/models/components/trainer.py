@@ -267,8 +267,8 @@ class BaseTrainer:
 
     def save_model(self, weight_path):
         if weight_path is not None:
-            output_dir = os.path.abspath(os.path.dirname(weight_path))
-            os.makedirs(output_dir, exist_ok=True)
+            result_dir = os.path.abspath(os.path.dirname(weight_path))
+            os.makedirs(result_dir, exist_ok=True)
             checkpoint = {"model": self.model.state_dict()}
 
             if self.optimizer is not None:
@@ -298,10 +298,10 @@ class BaseTrainer:
     #############################################################
 
     @torch.no_grad()
-    def test(self, test_loader, output_dir=None, show_image=False, img_prefix="img",
+    def test(self, test_loader, result_dir=None, show_image=False, image_prefix="img",
             skip_normal=False, skip_anomaly=False, num_max=-1, normalize=True):
-        if output_dir is not None:
-            os.makedirs(output_dir, exist_ok=True)
+        if result_dir is not None:
+            os.makedirs(result_dir, exist_ok=True)
 
         self.model.eval()
         num_images = 0
@@ -355,10 +355,10 @@ class BaseTrainer:
                     ax.axis("off")
 
                 fig.tight_layout()
-                if output_dir is not None:
+                if result_dir is not None:
                     label_name = "normal" if label == 0 else "anomaly"
-                    file_name = f"{img_prefix}_{label_name}_{num_images:03d}.png"
-                    fig.savefig(os.path.join(output_dir, file_name), dpi=150)
+                    file_name = f"{image_prefix}_{label_name}_{num_images:03d}.png"
+                    fig.savefig(os.path.join(result_dir, file_name), dpi=150)
                 if show_image:
                     plt.show()
 

@@ -207,7 +207,7 @@ if __name__ == "__main__":
     # run("cflow-resnet50", dataset, category, num_epochs=3)
     # run("fastflow-resnet50", dataset, category, num_epochs=10)
     # run("fastflow-cait", dataset, category, num_epochs=10)
-    # run("fastflow-deit", dataset, category, num_epochs=10)
+    run("fastflow-deit", dataset, category, num_epochs=10)
     # run("csflow", dataset, category, num_epochs=10)
     # run("uflow-resnet50", dataset, category, num_epochs=10)
     # run("uflow-mcait", dataset, category, num_epochs=10)
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     # 4. Reconstruction-based: GANomaly(2018), DRAEM(2021), DSR(2022)
     #############################################################
 
-    run("autoencoder", dataset, category, num_epochs=50)
+    # run("autoencoder", dataset, category, num_epochs=50)
     # run("draem", dataset, category, num_epochs=10)
 
 

@@ -1,11 +1,13 @@
+import os
+
 class ModelRegistry:
     _registry = {}
 
     @classmethod
-    def register(cls, model_type, trainer_path, trainer_kwargs, train_config):
+    def register(cls, model_type, trainer_path, model_config, train_config):
         cls._registry[model_type] = {
             "trainer_path": trainer_path,
-            "trainer_kwargs": trainer_kwargs,
+            "model_config": model_config,
             "train_config": train_config
         }
 
@@ -44,6 +46,32 @@ class ModelRegistry:
         return categories
 
 
+def get_config(model_type):
+    config = ModelRegistry.get(model_type)
+    return config["train_config"]
+
+
+def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
+    config = ModelRegistry.get(model_type)
+
+    module_path, class_name = config["trainer_path"].rsplit(".", 1)
+    module = __import__(module_path, fromlist=[class_name])
+    TrainerClass = getattr(module, class_name)
+
+    model_config = config["model_config"].copy()
+    model_config['backbone_dir'] = backbone_dir
+
+    if 'input_size' in model_config:
+        model_config['input_size'] = (img_size, img_size)
+    if 'img_size' in model_config:
+        model_config['img_size'] = img_size
+
+    if 'dtd_dir' in model_config:
+        model_config['dtd_dir'] = os.path.join(dataset_dir, "dtd")
+
+    return TrainerClass(**model_config)
+
+
 def register_all_models():
     #############################################################
     ## 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
@@ -76,7 +104,7 @@ def register_all_models():
     )
     ModelRegistry.register("fastflow-cait", "models.model_fastflow.FastflowTrainer",
         dict(backbone="cait_m48_448"),
-        dict(num_epochs=10, batch_size=4, normalize=True, img_size=448)
+        dict(num_epochs=5, batch_size=4, normalize=True, img_size=448)
     )
     ModelRegistry.register("fastflow-deit", "models.model_fastflow.FastflowTrainer",
         dict(backbone="deit_base_distilled_patch16_384"),
