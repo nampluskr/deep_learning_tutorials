@@ -262,7 +262,7 @@ class ReverseDistillationModel(nn.Module):
         anomaly_map = self.anomaly_map_generator(encoder_features, decoder_features)
         pred_score = torch.amax(anomaly_map, dim=(-2, -1))
         return dict(pred_score=pred_score, anomaly_map=anomaly_map)
-    
+
 #####################################################################
 # Trainer for Reverse Distillation Model
 #####################################################################
@@ -270,11 +270,11 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class ReverseDistillationTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, 
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
                  backbone_dir=None, backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"],
                  input_size=(256, 256)):
         if model is None:
-            model = ReverseDistillationModel(backbone=backbone, layers=layers, pre_trained=True, 
+            model = ReverseDistillationModel(backbone=backbone, layers=layers, pre_trained=True,
                 input_size=input_size, anomaly_map_mode=AnomalyMapGenerationMode.ADD)
         if optimizer is None:
             params = params=list(model.decoder.parameters()) + list(model.bottleneck.parameters())
@@ -293,7 +293,8 @@ class ReverseDistillationTrainer(BaseTrainer):
         self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
         set_backbone_dir(self.backbone_dir)
         self.eval_period = 5
-        
+
+    @torch.enable_grad()
     def train_step(self, batch):
         images = batch["image"].to(self.device)
 

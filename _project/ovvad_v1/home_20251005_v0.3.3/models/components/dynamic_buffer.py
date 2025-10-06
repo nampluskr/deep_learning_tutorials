@@ -9,18 +9,6 @@ from torch import nn
 
 class DynamicBufferMixin(nn.Module, ABC):
     def get_tensor_attribute(self, attribute_name: str) -> torch.Tensor:
-        """Get a tensor attribute by name.
-
-        Args:
-            attribute_name (str): Name of the tensor attribute to retrieve
-
-        Raises:
-            ValueError: If the attribute with name ``attribute_name`` is not a
-                ``torch.Tensor``
-
-        Returns:
-            torch.Tensor: The tensor attribute
-        """
         attribute = getattr(self, attribute_name)
         if isinstance(attribute, torch.Tensor):
             return attribute

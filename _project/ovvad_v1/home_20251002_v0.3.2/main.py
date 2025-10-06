@@ -93,7 +93,7 @@ def run_padim(dataset, category):
 
     config = get_config("padim", dataset, category, num_epochs=1)
     config.imagenet_normalize = True
-    config.batch_size=8
+    config.batch_size=4
     set_seed(seed=config.seed)
     trainer = PaDimTrainer(PaDim(backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"],
             pre_trained=True, n_features=None))
@@ -333,7 +333,7 @@ if __name__ == "__main__":
     ## 2. Nomalizing Flow-based (4): CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
     #############################################################
 
-    run_cflow(dataset, category, num_epochs=1)
+    # run_cflow(dataset, category, num_epochs=1)
     # run_fastflow(dataset, category, num_epochs=10)
     # run_csflow(dataset, category, num_epochs=10)
     # run_uflow(dataset, category, num_epochs=10)
@@ -354,5 +354,5 @@ if __name__ == "__main__":
 
     # run_autoencoder(dataset, category, num_epochs=50)
     # run_ganomaly(dataset, category, num_epochs=20)
-    # run_draem(dataset, category, num_epochs=20)
+    run_draem(dataset, category, num_epochs=20)
     # run_dsr(dataset, category, num_epochs=10)

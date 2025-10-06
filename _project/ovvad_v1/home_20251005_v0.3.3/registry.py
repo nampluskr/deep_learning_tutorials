@@ -1,0 +1,136 @@
+class ModelRegistry:
+    _registry = {}
+
+    @classmethod
+    def register(cls, model_type, trainer_path, trainer_kwargs, train_config):
+        cls._registry[model_type] = {
+            "trainer_path": trainer_path,
+            "trainer_kwargs": trainer_kwargs,
+            "train_config": train_config
+        }
+
+    @classmethod
+    def get(cls, model_type):
+        if model_type not in cls._registry:
+            available = ', '.join(cls.list_models())
+            raise ValueError(
+                f"Unknown model_type: '{model_type}'.\n"
+                f"Available models: {available}"
+            )
+        return cls._registry[model_type]
+
+    @classmethod
+    def list_models(cls):
+        return sorted(cls._registry.keys())
+
+    @classmethod
+    def list_by_category(cls):
+        categories = {
+            "Memory-based": [],
+            "Normalizing Flow": [],
+            "Knowledge Distillation": [],
+            "Reconstruction": []
+        }
+        for model_type in cls._registry.keys():
+            if model_type in ["padim", "patchcore"]:
+                categories["Memory-based"].append(model_type)
+            elif model_type.startswith(("cflow", "fastflow", "csflow", "uflow")):
+                categories["Normalizing Flow"].append(model_type)
+            elif model_type in ["stfpm", "fre", "efficientad-small", "efficientad-medium", "reverse-distillation"]:
+                categories["Knowledge Distillation"].append(model_type)
+            elif model_type in ["autoencoder", "draem"]:
+                categories["Reconstruction"].append(model_type)
+
+        return categories
+
+
+def register_all_models():
+    #############################################################
+    ## 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
+    #############################################################
+
+    ModelRegistry.register("padim", "models.model_padim.PadimTrainer",
+        dict(backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"]),
+        dict(num_epochs=1, batch_size=4, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("patchcore", "models.model_patchcore.PatchcoreTrainer",
+        dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"]),
+        dict(num_epochs=1, batch_size=8, normalize=True, img_size=256)
+    )
+
+    #############################################################
+    ## 2. Nomalizing Flow-based: CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
+    #############################################################
+
+    ModelRegistry.register("cflow-resnet18", "models.model_cflow.CflowTrainer",
+        dict(backbone="resnet18", layers=["layer1", "layer2", "layer3"]),
+        dict(num_epochs=10, batch_size=4, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("cflow-resnet50", "models.model_cflow.CflowTrainer",
+        dict(backbone="resnet50", layers=["layer1", "layer2", "layer3"]),
+        dict(num_epochs=10, batch_size=4, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("fastflow-resnet50", "models.model_fastflow.FastflowTrainer",
+        dict(backbone="wide_resnet50_2"),
+        dict(num_epochs=20, batch_size=8, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("fastflow-cait", "models.model_fastflow.FastflowTrainer",
+        dict(backbone="cait_m48_448"),
+        dict(num_epochs=10, batch_size=4, normalize=True, img_size=448)
+    )
+    ModelRegistry.register("fastflow-deit", "models.model_fastflow.FastflowTrainer",
+        dict(backbone="deit_base_distilled_patch16_384"),
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=384)
+    )
+    ModelRegistry.register("csflow", "models.model_csflow.CsFlowTrainer",
+        dict(num_channels=3),
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("uflow-resnet50", "models.model_uflow.UflowTrainer",
+        dict(backbone="wide_resnet50_2"),
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=448)
+    )
+    ModelRegistry.register("uflow-mcait", "models.model_uflow.UflowTrainer",
+        dict(backbone="mcait"),
+        dict(num_epochs=10, batch_size=4, normalize=True, img_size=448)
+    )
+
+    #############################################################
+    # 3. Knowledge Distillation: STFPM(2021), FRE(2023), Reverse Distillation(2022), EfficientAD(2024)
+    #############################################################
+
+    ModelRegistry.register("stfpm", "models.model_stfpm.STFPMTrainer",
+        dict(backbone="resnet50", layers=["layer1", "layer2", "layer3"]),
+        dict(num_epochs=50, batch_size=16, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("fre", "models.model_fre.FRETrainer",
+        dict(backbone="resnet50", layer="layer3"),
+        dict(num_epochs=50, batch_size=16, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("efficientad-small", "models.model_efficientad.EfficientAdTrainer",
+        dict(model_size="small"),
+        dict(num_epochs=10, batch_size=1, normalize=False, img_size=256)
+    )
+    ModelRegistry.register("efficientad-medium", "models.model_efficientad.EfficientAdTrainer",
+        dict(model_size="medium"),
+        dict(num_epochs=10, batch_size=1, normalize=False, img_size=256)
+    )
+    ModelRegistry.register("reverse-distillation", "models.model_reverse_distillation.ReverseDistillationTrainer",
+        dict(backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"]),
+        dict(num_epochs=50, batch_size=8, normalize=True, img_size=256)
+    )
+
+    #############################################################
+    # 4. Reconstruction-based: GANomaly(2018), DRAEM(2021), DSR(2022)
+    #############################################################
+
+    ModelRegistry.register("autoencoder", "models.model_autoencoder.AutoencoderTrainer",
+        dict(latent_dim=128),
+        dict(num_epochs=50, batch_size=16, normalize=False, img_size=256)
+    )
+    ModelRegistry.register("draem", "models.model_draem.DraemTrainer",
+        dict(sspcab=True),
+        dict(num_epochs=10, batch_size=8, normalize=False, img_size=256)
+    )
+
+register_all_models()

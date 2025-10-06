@@ -556,6 +556,7 @@ class CsFlowTrainer(BaseTrainer):
         self.eval_period = 5
         self.model.feature_extractor.eval()
 
+    @torch.enable_grad()
     def train_step(self, batch):
         images = batch["image"].to(self.device)
 

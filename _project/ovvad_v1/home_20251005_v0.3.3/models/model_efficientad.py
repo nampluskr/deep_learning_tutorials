@@ -353,8 +353,8 @@ class EfficientAdTrainer(BaseTrainer):
             early_stopper_loss = EarlyStopper(patience=10, min_delta=0.01, mode='min', target_value=1.0)
         if early_stopper_auroc is None:
             early_stopper_auroc = EarlyStopper(patience=10, min_delta=0.001, mode='max', target_value=0.995)
-        super().__init__(model, optimizer, loss_fn, metrics, device, scheduler,
-                         early_stopper_loss, early_stopper_auroc)
+        super().__init__(model, optimizer, loss_fn, metrics, device, 
+                         scheduler, early_stopper_loss, early_stopper_auroc)
 
         self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
         self.model_size = model_size

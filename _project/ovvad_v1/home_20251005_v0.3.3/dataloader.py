@@ -10,7 +10,7 @@ from torchvision import transforms as T
 
 
 class BaseDataset(Dataset):
-    def __init__(self, data_dir, category, split="train", transform=None, mask_transform=None):
+    def __init__(self, dataset_dir, category, split="train", transform=None, mask_transform=None):
         super().__init__()
         self.transform = transform
         self.mask_transform = mask_transform
@@ -19,11 +19,11 @@ class BaseDataset(Dataset):
         self.labels = []
         self.defect_types = []
 
-        self.load_data(data_dir, category, split)
+        self.load_data(dataset_dir, category, split)
         print(f" > {category} - {split} set: {len(self)} images, "
               f"Normal: {self.labels.count(0)}, Anomaly: {self.labels.count(1)}")
 
-    def load_data(self, data_dir, category, split):
+    def load_data(self, dataset_dir, category, split):
         raise NotImplementedError
 
     def __len__(self):
@@ -55,8 +55,8 @@ class BaseDataset(Dataset):
 
 
 class MVTecDataset(BaseDataset):
-    def load_data(self, data_dir, category, split):
-        category_dir = os.path.join(data_dir, category)
+    def load_data(self, dataset_dir, category, split):
+        category_dir = os.path.join(dataset_dir, category)
 
         if split == "train":
             normal_image_dir = os.path.join(category_dir, "train", "good")
@@ -93,8 +93,8 @@ class MVTecDataset(BaseDataset):
 
 
 class VisADataset(BaseDataset):
-    def load_data(self, data_dir, category, split="train", test_ratio=0.2):
-        csv_path = os.path.join(data_dir, category, "image_anno.csv")
+    def load_data(self, dataset_dir, category, split="train", test_ratio=0.2):
+        csv_path = os.path.join(dataset_dir, category, "image_anno.csv")
         df = pd.read_csv(csv_path)
 
         normal_df = df[df["label"] == "normal"].reset_index(drop=True)
@@ -110,7 +110,7 @@ class VisADataset(BaseDataset):
             subset = pd.concat([normal_test, anomaly_df], axis=0).reset_index(drop=True)
 
         for _, row in subset.iterrows():
-            image_path = os.path.join(data_dir, row["image"])
+            image_path = os.path.join(dataset_dir, row["image"])
             defect_type = row["label"]
 
             if defect_type == "normal":
@@ -120,15 +120,15 @@ class VisADataset(BaseDataset):
                 self.defect_types.append("good")
             else:
                 self.image_paths.append(image_path)
-                mask_path = os.path.join(data_dir, row["mask"])
+                mask_path = os.path.join(dataset_dir, row["mask"])
                 self.mask_paths.append(mask_path)
                 self.labels.append(1)
                 self.defect_types.append(str(defect_type))
 
 
 class BTADDataset(BaseDataset):
-    def load_data(self, data_dir, category, split):
-        category_dir = os.path.join(data_dir, category)
+    def load_data(self, dataset_dir, category, split):
+        category_dir = os.path.join(dataset_dir, category)
 
         if split == "train":
             normal_image_dir = os.path.join(category_dir, "train", "ok")
@@ -167,43 +167,40 @@ class BTADDataset(BaseDataset):
                 self.defect_types.append("anomaly")
 
 
-def get_dataloaders(config):
+def get_dataloaders(dataset_name, dataset_dir, category, img_size, batch_size,
+                    num_workers=8, pin_memory=True, persistent_workers=True, normalize=True):
     train_transforms = [
-        T.Resize((config.img_size, config.img_size), interpolation=T.InterpolationMode.BILINEAR),
-        # T.RandomHorizontalFlip(p=0.5),
-        # T.RandomVerticalFlip(p=0.5),
-        # T.RandomRotation(15),
+        T.Resize((img_size, img_size), interpolation=T.InterpolationMode.BILINEAR),
         T.ToTensor(),
     ]
     test_transforms = [
-        T.Resize((config.img_size, config.img_size), interpolation=T.InterpolationMode.BILINEAR),
+        T.Resize((img_size, img_size), interpolation=T.InterpolationMode.BILINEAR),
         T.ToTensor(),
     ]
-
-    if config.imagenet_normalize:
-        normalize = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        train_transforms.append(normalize)
-        test_transforms.append(normalize)
+    if normalize:
+        normalize_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        train_transforms.append(normalize_transform)
+        test_transforms.append(normalize_transform)
 
     train_transform = T.Compose(train_transforms)
     test_transform = T.Compose(test_transforms)
+
     mask_transform = T.Compose([
-        T.Resize((config.img_size, config.img_size), interpolation=T.InterpolationMode.NEAREST),
+        T.Resize((img_size, img_size), interpolation=T.InterpolationMode.NEAREST),
     ])
 
     datasets = {"mvtec": MVTecDataset, "visa": VisADataset, "btad": BTADDataset}
-    dataset = datasets.get(config.dataset.lower())
+    DatasetClass = datasets.get(dataset_name.lower())
+    if DatasetClass is None:
+        raise ValueError(f"Unknown dataset: {dataset_name}. Available: {list(datasets.keys())}")
 
-    train_set = dataset(data_dir=config.data_dir, category=config.category,
-        split="train", transform=train_transform, mask_transform=mask_transform)
-    test_set = dataset(data_dir=config.data_dir, category=config.category,
-        split="test", transform=test_transform, mask_transform=mask_transform)
+    train_set = DatasetClass(dataset_dir=dataset_dir, category=category, split="train",
+        transform=train_transform, mask_transform=mask_transform)
+    test_set = DatasetClass(dataset_dir=dataset_dir, category=category, split="test",
+        transform=test_transform, mask_transform=mask_transform)
 
-    train_loader = DataLoader(train_set, batch_size=config.batch_size, shuffle=True,
-        num_workers=config.num_workers, pin_memory=config.pin_memory,
-        persistent_workers=config.persistent_workers)
-    test_loader = DataLoader(test_set, batch_size=config.batch_size, shuffle=False,
-        num_workers=config.num_workers, pin_memory=config.pin_memory,
-        persistent_workers=config.persistent_workers)
-
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True,
+        num_workers=num_workers, pin_memory=pin_memory, persistent_workers=persistent_workers)
+    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=pin_memory, persistent_workers=persistent_workers)
     return train_loader, test_loader

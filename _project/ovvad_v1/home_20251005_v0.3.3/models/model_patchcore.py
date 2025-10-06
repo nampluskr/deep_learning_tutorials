@@ -214,16 +214,14 @@ from tqdm import tqdm
 from .components.trainer import BaseTrainer, EarlyStopper
 
 class PatchcoreTrainer(BaseTrainer):
-    def __init__(self, model=None, optimizer=None, scheduler=None,
-                 early_stopper_loss=None, early_stopper_auroc=None,
-                 loss_fn=None, metrics=None, device=None,
+    def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
                  backbone_dir=None, backbone="wide_resnet50_2", layers=["layer2", "layer3"]):
 
         if model is None:
             model = PatchcoreModel(backbone=backbone, layers=layers, pre_trained=True)
-
-        super().__init__(model, optimizer, scheduler, early_stopper_loss,
-                         early_stopper_auroc, loss_fn, metrics, device)
+        super().__init__(model, optimizer, loss_fn, metrics, device,
+                         scheduler, early_stopper_loss, early_stopper_auroc)
 
         self.backbone_dir = backbone_dir or "/mnt/d/backbones"
         set_backbone_dir(self.backbone_dir)

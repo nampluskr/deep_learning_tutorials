@@ -281,6 +281,7 @@ class CflowTrainer(BaseTrainer):
         set_backbone_dir(self.backbone_dir)
         self.eval_period = 1
 
+    @torch.enable_grad()
     def train_step(self, batch):
         images = batch['image'].to(self.device)
         activation = self.model.encoder(images)

@@ -299,7 +299,7 @@ class BaseTrainer:
 
     @torch.no_grad()
     def test(self, test_loader, output_dir=None, show_image=False, img_prefix="img",
-            skip_normal=False, skip_anomaly=False, num_max=-1, imagenet_normalize=True):
+            skip_normal=False, skip_anomaly=False, num_max=-1, normalize=True):
         if output_dir is not None:
             os.makedirs(output_dir, exist_ok=True)
 
@@ -324,7 +324,7 @@ class BaseTrainer:
                 num_images += 1
 
                 img_tensor = images[i].cpu()
-                if imagenet_normalize:
+                if normalize:
                     original = denormalize(img_tensor).clamp(0, 1)
                 else:
                     original = img_tensor.clamp(0, 1)
