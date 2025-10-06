@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from .components.feature_extractor import TimmFeatureExtractor
+from .components.feature_extractor import TimmFeatureExtractor, set_backbone_dir
 from .components.tiler import Tiler
 
 
@@ -154,24 +154,27 @@ class STFPMModel(nn.Module):
 from .components.trainer import BaseTrainer, EarlyStopper
 
 class STFPMTrainer(BaseTrainer):
-    def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None, 
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None):
+    def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, 
+                 backbone_dir=None, backbone="resnet50", layers=["layer1", "layer2", "layer3"]):
         if model is None:
-            model = STFPMModel(backbone="resnet50", layers=["layer1", "layer2", "layer3"])
+            model = STFPMModel(backbone=backbone, layers=layers)
         if optimizer is None:
-            optimizer = torch.optim.SGD(params=model.student_model.parameters(),
-                lr=0.4, momentum=0.9, dampening=0.0, weight_decay=0.001)
+            params = model.student_model.parameters()
+            optimizer = torch.optim.SGD(params, lr=0.4, momentum=0.9, dampening=0.0, weight_decay=0.001)
         if scheduler is None:
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
         if early_stopper_loss is None:
-            early_stopper_loss = EarlyStopper(patience=10, min_delta=0.01, mode='min', target_value=2.0)
-        # if early_stopper_auroc is None:
-        #     early_stopper_auroc = EarlyStopper(patience=10, min_delta=0.001, mode='max', target_value=0.990)
+            early_stopper_loss = EarlyStopper(patience=10, min_delta=0.01, mode='min', target_value=1.0)
+        if early_stopper_auroc is None:
+            early_stopper_auroc = EarlyStopper(patience=10, min_delta=0.001, mode='max', target_value=0.995)
         if loss_fn is None:
             loss_fn = STFPMLoss()
-            
-        super().__init__(model, optimizer, loss_fn, metrics, device, 
+
+        super().__init__(model, optimizer, loss_fn, metrics, device,
                          scheduler, early_stopper_loss, early_stopper_auroc)
+        self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
+        set_backbone_dir(self.backbone_dir)
         self.eval_period = 5
 
     @torch.enable_grad()
@@ -183,5 +186,10 @@ class STFPMTrainer(BaseTrainer):
         loss = self.loss_fn(teacher_features, student_features)
         loss.backward()
         self.optimizer.step()
-        return {"loss": loss.item()}
+        
+        results = {"loss": loss.item()}
+        with torch.no_grad():
+            for name, metric_fn in self.metrics.items():
+                results[name] = metric_fn(teacher_features, student_features).item()
+        return results
 

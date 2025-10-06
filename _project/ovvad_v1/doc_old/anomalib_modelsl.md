@@ -94,7 +94,7 @@
   - https://anomalib.readthedocs.io/en/v2.1.0/markdown/guides/reference/models/image/cfa.html
   - https://arxiv.org/abs/2206.04325
 
-## 6. Models - latest
+## 6. Foundation Models - latest
 
 - WinCLIP (2023): Zero-/Few-Shot Anomaly Classification and Segmentation
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/winclip

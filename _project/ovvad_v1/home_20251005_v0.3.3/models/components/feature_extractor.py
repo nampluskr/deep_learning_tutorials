@@ -62,6 +62,21 @@ def get_local_weight_path(backbone: str):
     return weight_path
 
 
+def get_transformer_weight_path(backbone: str, cache_subdir: str):
+    cache_dir = os.path.join(BACKBONE_DIR, cache_subdir, "snapshots")
+
+    if not os.path.isdir(cache_dir):
+        return None
+
+    snapshot_dirs = os.listdir(cache_dir)
+    if not snapshot_dirs:
+        return None
+
+    snapshot_hash = snapshot_dirs[0]
+    weight_path = os.path.join(cache_dir, snapshot_hash, "model.safetensors")
+    return weight_path if os.path.isfile(weight_path) else None
+
+
 def set_backbone_dir(backbone_dir):
     global BACKBONE_DIR
     BACKBONE_DIR = backbone_dir

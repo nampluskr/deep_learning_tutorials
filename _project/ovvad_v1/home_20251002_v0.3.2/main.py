@@ -49,7 +49,7 @@ def get_config(model_type, dataset, category, num_epochs=20):
         num_epochs=num_epochs,
         img_name=f"img_{dataset}_{category}_{model_type}_epochs-{num_epochs}",
         weight_name=f"model_{dataset}_{category}_{model_type}_epochs-{num_epochs}.pth",
-        output_dir=os.path.join("/mnt/d/outputs", dataset, category, model_type),
+        output_dir=os.path.join("/mnt/d/outputs_old", dataset, category, model_type),
     )
     config.weight_path=os.path.join(config.output_dir, config.weight_name)
     config.imagenet_normalize = False if model_type.startswith("efficientad") else True
@@ -118,14 +118,26 @@ def run_dfkde(dataset, category):
 ## 2. Nomalizing Flow-based (4): CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
 #############################################################
 
+# def run_cflow(dataset, category, num_epochs=10):
+#     from model_cflow import CFlow, CFlowTrainer
+
+#     config = get_config("cflow-resnet50", dataset, category, num_epochs)
+#     config.imagenet_normalize = True
+#     config.batch_size = 4
+#     set_seed(seed=config.seed)
+#     model = CFlow(backbone="resnet50", layers=["layer1", "layer2", "layer3"])
+#     trainer = CFlowTrainer(model)
+#     run_experiment(trainer, config)
+
+
 def run_cflow(dataset, category, num_epochs=10):
     from model_cflow import CFlow, CFlowTrainer
 
-    config = get_config("cflow-resnet50", dataset, category, num_epochs)
+    config = get_config("cflow-resnet18", dataset, category, num_epochs)
     config.imagenet_normalize = True
     config.batch_size = 4
     set_seed(seed=config.seed)
-    model = CFlow(backbone="resnet50", layers=["layer1", "layer2", "layer3"])
+    model = CFlow(backbone="resnet18", layers=["layer1", "layer2", "layer3"])
     trainer = CFlowTrainer(model)
     run_experiment(trainer, config)
 
@@ -321,7 +333,7 @@ if __name__ == "__main__":
     ## 2. Nomalizing Flow-based (4): CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
     #############################################################
 
-    # run_cflow(dataset, category, num_epochs=10)
+    run_cflow(dataset, category, num_epochs=1)
     # run_fastflow(dataset, category, num_epochs=10)
     # run_csflow(dataset, category, num_epochs=10)
     # run_uflow(dataset, category, num_epochs=10)
@@ -343,4 +355,4 @@ if __name__ == "__main__":
     # run_autoencoder(dataset, category, num_epochs=50)
     # run_ganomaly(dataset, category, num_epochs=20)
     # run_draem(dataset, category, num_epochs=20)
-    run_dsr(dataset, category, num_epochs=10)
+    # run_dsr(dataset, category, num_epochs=10)

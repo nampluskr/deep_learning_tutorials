@@ -106,7 +106,7 @@ class BaseTrainer:
     def train_epoch(self, train_loader):
         results = {"loss": 0.0, **{name: 0.0 for name in self.metrics}}
         total = 0
-        with tqdm(train_loader, desc="> Training", leave=False, ascii=True) as pbar:
+        with tqdm(train_loader, desc=" > Training", leave=False, ascii=True) as pbar:
             for batch in pbar:
                 batch_size = batch["image"].size(0)
                 total += batch_size
@@ -154,7 +154,7 @@ class BaseTrainer:
     @torch.no_grad()
     def validation_epoch(self, loader):
         all_scores, all_labels = [], []
-        with tqdm(loader, desc="> Validation", leave=False, ascii=True) as pbar:
+        with tqdm(loader, desc=" > Validation", leave=False, ascii=True) as pbar:
             for batch in loader:
                 scores = self.validation_step(batch)
                 labels = batch["label"].cpu()
