@@ -532,9 +532,11 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class CsFlowTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 backbone_dir=None, input_size=(256, 256), num_channels=3):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 input_size=(256, 256), num_channels=3):
+
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = CsFlowModel(input_size=input_size, num_channels=num_channels,
                 cross_conv_hidden_channels=1024, n_coupling_blocks=4, clamp=3)
         if optimizer is None:
@@ -551,8 +553,6 @@ class CsFlowTrainer(BaseTrainer):
 
         super().__init__(model, optimizer, loss_fn, metrics, device,
                          scheduler, early_stopper_loss, early_stopper_auroc)
-        self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
-        set_backbone_dir(self.backbone_dir)
         self.eval_period = 5
         self.model.feature_extractor.eval()
 

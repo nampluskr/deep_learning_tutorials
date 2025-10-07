@@ -155,9 +155,11 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class STFPMTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, 
-                 backbone_dir=None, backbone="resnet50", layers=["layer1", "layer2", "layer3"]):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 backbone="resnet50", layers=["layer1", "layer2", "layer3"]):
+
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = STFPMModel(backbone=backbone, layers=layers)
         if optimizer is None:
             params = model.student_model.parameters()
@@ -173,8 +175,6 @@ class STFPMTrainer(BaseTrainer):
 
         super().__init__(model, optimizer, loss_fn, metrics, device,
                          scheduler, early_stopper_loss, early_stopper_auroc)
-        self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
-        set_backbone_dir(self.backbone_dir)
         self.eval_period = 5
 
     @torch.enable_grad()

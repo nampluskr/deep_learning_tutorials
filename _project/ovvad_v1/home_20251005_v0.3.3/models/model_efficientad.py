@@ -337,9 +337,11 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class EfficientAdTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 backbone_dir=None, model_size="small"):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 model_size="small"):
+
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = EfficientAdModel(teacher_out_channels=384,
                 model_size=EfficientAdModelSize.S if model_size == "small" else EfficientAdModelSize.M,
                 padding=False, pad_maps=True)
@@ -353,15 +355,15 @@ class EfficientAdTrainer(BaseTrainer):
             early_stopper_loss = EarlyStopper(patience=10, min_delta=0.01, mode='min', target_value=1.0)
         if early_stopper_auroc is None:
             early_stopper_auroc = EarlyStopper(patience=10, min_delta=0.001, mode='max', target_value=0.995)
+        
         super().__init__(model, optimizer, loss_fn, metrics, device, 
                          scheduler, early_stopper_loss, early_stopper_auroc)
+        self.eval_period = 5
 
-        self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
         self.model_size = model_size
         self.batch_size = 1
         self.imagenet_loader = None
         self.imagenet_iterator = None
-        self.eval_period = 5
 
     def prepare_pretrained_model(self) -> None:
         pretrained_models_dir = self.backbone_dir

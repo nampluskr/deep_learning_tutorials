@@ -38,11 +38,11 @@ class EarlyStopper:
                 self.target_reached = True
                 self.early_stop = True
                 return True
-        
+
         if self.best_score is None:
             self.best_score = score
             return False
-        
+
         if self.mode == 'max':
             if score > self.best_score + self.min_delta:
                 self.best_score = score
@@ -55,17 +55,18 @@ class EarlyStopper:
                 self.counter = 0
             else:
                 self.counter += 1
-        
+
         if self.counter >= self.patience:
             self.early_stop = True
             return True
-        
+
         return False
 
 
 class BaseTrainer:
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
                  scheduler=None, early_stopper_loss=None, early_stopper_auroc=None):
+
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if model is None:
             raise ValueError("Model must be provided or defined in the subclass __init__")
@@ -81,7 +82,7 @@ class BaseTrainer:
             for name, metric_fn in metrics.items():
                 self.metrics[name] = metric_fn.to(self.device) if isinstance(metric_fn, nn.Module) else metric_fn
 
-        self.epoch_period = 5           # period for evaluation of classification metrics
+        self.eval_period = 5           # period for evaluation of classification metrics
         self.history = {}               # training history
 
         # Temperary variables for training/validation process
@@ -91,6 +92,11 @@ class BaseTrainer:
         self.num_epochs = None          # total number of epochs for training
         self.train_info = None          # string for training info
         self.valid_info = None          # string for validation info
+
+    def set_backbone_dir(self, backbone_dir):
+        from .feature_extractor import set_backbone_dir
+        self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
+        set_backbone_dir(self.backbone_dir)
 
     #############################################################
     # Hooks for training process
@@ -126,7 +132,7 @@ class BaseTrainer:
         for name, value in train_results.items():
             self.history.setdefault(name, [])
             self.history[name].append(value)
-            
+
         if self.early_stopper_loss is not None:
             loss = train_results.get('loss', float('inf'))
             if self.early_stopper_loss(loss):
@@ -174,7 +180,7 @@ class BaseTrainer:
         elapsed_time = time() - self.epoch_start_time
         epoch_info = f" [{self.epoch:3d}/{self.num_epochs}]"
         print(f" {epoch_info} {self.train_info} | {self.valid_info} ({elapsed_time:.1f}s)")
-        
+
         for name, value in valid_results.items():
             self.history.setdefault(name, [])
             self.history[name].append(value)
@@ -252,7 +258,7 @@ class BaseTrainer:
                 self.on_validation_start(valid_loader)
                 valid_results, scores, labels = self.validation_epoch(valid_loader)
                 self.on_validation_end(valid_results, scores, labels)
-                
+
                 if self.early_stopper_auroc is not None and self.early_stopper_auroc.early_stop:
                     break
 
@@ -276,7 +282,7 @@ class BaseTrainer:
             if self.scheduler is not None:
                 checkpoint["scheduler"] = self.scheduler.state_dict()
             torch.save(checkpoint, weight_path)
-            print(f" > Model (optimizer/scheduler) weights saved to: {weight_path}\n")
+            print(f" > Model weights saved to: {weight_path}\n")
 
     def load_model(self, weight_path):
         if os.path.isfile(weight_path):
@@ -298,7 +304,7 @@ class BaseTrainer:
     #############################################################
 
     @torch.no_grad()
-    def test(self, test_loader, result_dir=None, show_image=False, image_prefix="img",
+    def test(self, test_loader, result_dir=None, show_image=False, desc=None,
             skip_normal=False, skip_anomaly=False, num_max=-1, normalize=True):
         if result_dir is not None:
             os.makedirs(result_dir, exist_ok=True)
@@ -357,8 +363,11 @@ class BaseTrainer:
                 fig.tight_layout()
                 if result_dir is not None:
                     label_name = "normal" if label == 0 else "anomaly"
-                    file_name = f"{image_prefix}_{label_name}_{num_images:03d}.png"
-                    fig.savefig(os.path.join(result_dir, file_name), dpi=150)
+                    if desc is None:
+                        image_name = f"image_{label_name}_{num_images:03d}.png"    
+                    else:
+                        image_name = f"image_{desc}_{label_name}_{num_images:03d}.png"
+                    fig.savefig(os.path.join(result_dir, image_name), dpi=150)
                 if show_image:
                     plt.show()
 

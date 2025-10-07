@@ -207,17 +207,15 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class PadimTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 backbone_dir=None, backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"]):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"]):
 
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = PadimModel(backbone=backbone, layers=layers, pre_trained=True, n_features=None)
 
         super().__init__(model, optimizer, loss_fn, metrics, device,
                          scheduler, early_stopper_loss, early_stopper_auroc)
-
-        self.backbone_dir = backbone_dir or "/mnt/d/backbones"
-        set_backbone_dir(self.backbone_dir)
         self.eval_period = 1
 
     def on_train_start(self, train_loader):

@@ -1,6 +1,34 @@
+"""
+Model Registry for Anomaly Detection Framework
+
+This module provides a centralized registry for all anomaly detection models.
+Models can be registered with their configurations and retrieved by name.
+
+Example:
+    >>> from registry import ModelRegistry
+    >>> config = ModelRegistry.get("padim")
+    >>> models = ModelRegistry.list_models()
+"""
+
 import os
 
 class ModelRegistry:
+    """Register a new model configuration.
+    
+    Args:
+        model_type: Unique identifier for the model (e.g., "padim", "patchcore")
+        trainer_path: Python path to the trainer class (e.g., "models.model_padim.PadimTrainer")
+        model_config: Model-specific configuration (backbone, layers, etc.)
+        train_config: Training configuration (epochs, batch_size, etc.)
+    
+    Example:
+        >>> ModelRegistry.register(
+        ...     "padim",
+        ...     "models.model_padim.PadimTrainer",
+        ...     {"backbone": "resnet50", "layers": ["layer1", "layer2"]},
+        ...     {"num_epochs": 1, "batch_size": 8}
+        ... )
+    """
     _registry = {}
 
     @classmethod
@@ -20,6 +48,10 @@ class ModelRegistry:
                 f"Available models: {available}"
             )
         return cls._registry[model_type]
+    
+    @classmethod
+    def is_registered(cls, model_type: str) -> bool:
+        return model_type in cls._registry
 
     @classmethod
     def list_models(cls):
@@ -31,7 +63,8 @@ class ModelRegistry:
             "Memory-based": [],
             "Normalizing Flow": [],
             "Knowledge Distillation": [],
-            "Reconstruction": []
+            "Reconstruction": [],
+            "Feature Adaptation": [],
         }
         for model_type in cls._registry.keys():
             if model_type in ["padim", "patchcore"]:
@@ -42,7 +75,8 @@ class ModelRegistry:
                 categories["Knowledge Distillation"].append(model_type)
             elif model_type in ["autoencoder", "draem"]:
                 categories["Reconstruction"].append(model_type)
-
+            elif model_type in ["dfm", "cfa"]:
+                categories["Feature Adaptation"].append(model_type)
         return categories
 
 
@@ -53,7 +87,6 @@ def get_config(model_type):
 
 def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
     config = ModelRegistry.get(model_type)
-
     module_path, class_name = config["trainer_path"].rsplit(".", 1)
     module = __import__(module_path, fromlist=[class_name])
     TrainerClass = getattr(module, class_name)
@@ -65,7 +98,6 @@ def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
         model_config['input_size'] = (img_size, img_size)
     if 'img_size' in model_config:
         model_config['img_size'] = img_size
-
     if 'dtd_dir' in model_config:
         model_config['dtd_dir'] = os.path.join(dataset_dir, "dtd")
 
@@ -73,8 +105,14 @@ def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
 
 
 def register_all_models():
+    """Register all available anomaly detection models.
+    
+    This function registers all implemented models with their default
+    configurations. It should be called once at module import time.
+    """
+    
     #############################################################
-    ## 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
+    # 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
     #############################################################
 
     ModelRegistry.register("padim", "models.model_padim.PadimTrainer",
@@ -87,7 +125,7 @@ def register_all_models():
     )
 
     #############################################################
-    ## 2. Nomalizing Flow-based: CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
+    # 2. Nomalizing Flow-based: CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
     #############################################################
 
     ModelRegistry.register("cflow-resnet18", "models.model_cflow.CflowTrainer",
@@ -116,7 +154,7 @@ def register_all_models():
     )
     ModelRegistry.register("uflow-resnet50", "models.model_uflow.UflowTrainer",
         dict(backbone="wide_resnet50_2"),
-        dict(num_epochs=10, batch_size=8, normalize=True, img_size=448)
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=256)
     )
     ModelRegistry.register("uflow-mcait", "models.model_uflow.UflowTrainer",
         dict(backbone="mcait"),
@@ -161,4 +199,18 @@ def register_all_models():
         dict(num_epochs=10, batch_size=8, normalize=False, img_size=256)
     )
 
+    #############################################################
+    # 5. Feature Adaptation: DFM(2019), CFA(2022)
+    #############################################################
+    
+    ModelRegistry.register("dfm", "models.model_dfm.DFMTrainer",
+        dict(backbone="resnet50", layer="layer3", score_type="fre"),
+        dict(num_epochs=1, batch_size=16, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("cfa", "models.model_cfa.CfaTrainer",
+        dict(backbone="wide_resnet50_2"),
+        dict(num_epochs=20, batch_size=16, normalize=True, img_size=256)
+    )
+
+# Auto-register all models when module is imported
 register_all_models()

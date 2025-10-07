@@ -388,9 +388,11 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class UflowTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 backbone_dir=None, backbone="wide_resnet50_2", input_size=(256, 256)):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None,
+                 backbone="wide_resnet50_2", input_size=(256, 256)):
+
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = UflowModel(backbone=backbone, input_size=input_size)
         if optimizer is None:
             optimizer = torch.optim.Adam([{"params": model.parameters(), "initial_lr": 1e-3}], 
@@ -406,9 +408,8 @@ class UflowTrainer(BaseTrainer):
 
         super().__init__(model, optimizer, loss_fn, metrics, device,
                          scheduler, early_stopper_loss, early_stopper_auroc)
-        self.backbone_dir = backbone_dir or "/home/namu/myspace/NAMU/project_2025/backbones"
-        set_backbone_dir(self.backbone_dir)
         self.eval_period = 5
+
         self.model.feature_extractor.eval()
 
     @torch.enable_grad()

@@ -438,9 +438,11 @@ from .components.perlin import PerlinAnomalyGenerator
 
 class DraemTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 backbone_dir=None, sspcab=True, dtd_dir=None):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 sspcab=True, dtd_dir=None):
+
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = DraemModel(sspcab=sspcab)
         if optimizer is None:
             optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
@@ -456,6 +458,7 @@ class DraemTrainer(BaseTrainer):
         super().__init__(model, optimizer, loss_fn, metrics, device, 
                          scheduler, early_stopper_loss, early_stopper_auroc)
         self.eval_period = 5
+
         self.dtd_dir = dtd_dir or "/mnt/d/datasets/dtd"
         self.augmenter = PerlinAnomalyGenerator(anomaly_source_path=self.dtd_dir, blend_factor=(0.1, 1.0))
         self.sspcab = sspcab

@@ -133,9 +133,11 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class AutoencoderTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 backbone_dir=None, latent_dim=512, img_size=256):
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 latent_dim=512, img_size=256):
+
         if model is None:
+            super().set_backbone_dir(backbone_dir)
             model = Autoencoder(latent_dim=latent_dim, img_size=img_size)
         if optimizer is None:
             optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-3, weight_decay=1e-5)
