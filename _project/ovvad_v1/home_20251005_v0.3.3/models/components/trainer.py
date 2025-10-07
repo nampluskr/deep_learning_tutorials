@@ -306,11 +306,12 @@ class BaseTrainer:
     @torch.no_grad()
     def test(self, test_loader, result_dir=None, show_image=False, desc=None,
             skip_normal=False, skip_anomaly=False, num_max=-1, normalize=True):
+
         if result_dir is not None:
             os.makedirs(result_dir, exist_ok=True)
 
         self.model.eval()
-        num_images = 0
+        num_saved = 0
         for batch in test_loader:
             labels = batch["label"].cpu().numpy()
             images = batch["image"].to(self.device)
@@ -324,16 +325,15 @@ class BaseTrainer:
                 label = int(labels[i])
                 score = float(scores[i])
 
-                if skip_normal and label == 0: continue
-                if skip_anomaly and label == 1: continue
-                if num_max > 0 and num_images >= num_max: continue
-                num_images += 1
+                is_normal = (label == 0)
+                is_anomaly = (label == 1)
+                if skip_normal and is_normal: continue
+                if skip_anomaly and is_anomaly: continue
+                if num_max > 0 and num_saved >= num_max: continue
+                num_saved += 1
 
                 img_tensor = images[i].cpu()
-                if normalize:
-                    original = denormalize(img_tensor).clamp(0, 1)
-                else:
-                    original = img_tensor.clamp(0, 1)
+                original = denormalize(img_tensor).clamp(0, 1) if normalize else img_tensor.clamp(0, 1)
                 amap = anomaly_maps[i]
                 anomaly_map = (amap - amap.min()) / (amap.max() - amap.min() + 1e-8)
 
@@ -362,16 +362,16 @@ class BaseTrainer:
 
                 fig.tight_layout()
                 if result_dir is not None:
-                    label_name = "normal" if label == 0 else "anomaly"
-                    if desc is None:
-                        image_name = f"image_{label_name}_{num_images:03d}.png"    
-                    else:
-                        image_name = f"image_{desc}_{label_name}_{num_images:03d}.png"
-                    fig.savefig(os.path.join(result_dir, image_name), dpi=150)
-                if show_image:
-                    plt.show()
+                    label_name = "normal" if is_normal else "anomaly"
+                    filename = f"image_{desc + '_' if desc else ''}{label_name}_{num_saved:04d}.png"
+                    filepath = os.path.join(result_dir, filename)
+                    fig.savefig(filepath, dpi=150)
 
+                if show_image: plt.show()
                 plt.close(fig)
+
+            if num_max > 0 and num_saved >= num_max:
+                break
 
 #############################################################
 # Helper functions

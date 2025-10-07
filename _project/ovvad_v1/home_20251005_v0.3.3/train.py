@@ -18,6 +18,50 @@ PIN_MEMORY = True
 PERSISTENT_WORKERS = True
 
 
+def set_globals(dataset_dir=None, backbone_dir=None, output_dir=None, 
+               seed=None, num_workers=None, pin_memory=None, persistent_workers=None):
+    global DATASET_DIR, BACKBONE_DIR, OUTPUT_DIR, SEED
+    global NUM_WORKERS, PIN_MEMORY, PERSISTENT_WORKERS
+    
+    if dataset_dir is not None:
+        DATASET_DIR = dataset_dir
+    if backbone_dir is not None:
+        BACKBONE_DIR = backbone_dir
+    if output_dir is not None:
+        OUTPUT_DIR = output_dir
+    if seed is not None:
+        SEED = seed
+
+    if num_workers is not None:
+        NUM_WORKERS = num_workers
+    if pin_memory is not None:
+        PIN_MEMORY = pin_memory
+    if persistent_workers is not None:
+        PERSISTENT_WORKERS = persistent_workers
+
+
+def get_globals():
+    return {
+        "dataset_dir": DATASET_DIR,
+        "backbone_dir": BACKBONE_DIR,
+        "output_dir": OUTPUT_DIR,
+        "seed": SEED,
+        "num_workers": NUM_WORKERS,
+        "pin_memory": PIN_MEMORY,
+        "persistent_workers": PERSISTENT_WORKERS,
+    }
+
+
+def print_globals():
+    config = get_globals()
+    print("\n" + "="*70)
+    print("Training Configuration")
+    print("="*70)
+    for key, value in config.items():
+        print(f"  {key:20s}: {value}")
+    print("="*70 + "\n")
+
+
 def set_seed(seed=42):
     import random
     import numpy as np
@@ -48,7 +92,7 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()
-        # print_memory_summary("Before Training")
+        # print_memory("Before Training")
 
     try:
         # Get configuration
@@ -76,22 +120,22 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
             root_dir=os.path.join(DATASET_DIR, dataset_type),
             img_size=img_size,  batch_size=batch_size,  normalize=normalize,
             num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, persistent_workers=PERSISTENT_WORKERS)
-        print_memory_summary("After Dataloader Creation")
+        # print_memory("After Dataloader Creation")
 
         # Create trainer
         trainer = get_trainer(model_type, backbone_dir=BACKBONE_DIR, dataset_dir=DATASET_DIR, img_size=img_size)
         count_parameters(trainer)
-        print_memory_summary("After Model Creation")
+        print_memory("After Model Creation")
 
         # Train with validation
         trainer.fit(train_loader, num_epochs, valid_loader=test_loader, weight_path=weight_path)
-        print_memory_summary("After Training")
+        print_memory("After Training")
 
-        # Save anomaly images
+        # Save anomaly maps
         trainer.test(test_loader, result_dir=result_dir, desc=desc, normalize=normalize,
-            skip_normal=True, num_max=10)
+            skip_normal=True, num_max=20)
         trainer.test(test_loader, result_dir=result_dir, desc=desc, normalize=normalize,
-            skip_anomaly=True, num_max=10)
+            skip_anomaly=True, num_max=20)
 
     except Exception as e:
         print(f"\n{'!'*70}")
@@ -104,16 +148,16 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
         if 'trainer' in locals():
             del trainer
         if 'train_loader' in locals():
-            cleanup_dataloader(train_loader)
+            clear_dataloader(train_loader)
             del train_loader
         if 'test_loader' in locals():
-            cleanup_dataloader(test_loader)
+            clear_dataloader(test_loader)
             del test_loader
 
         clear_memory(print_summary=True)
 
 
-def cleanup_dataloader(dataloader):
+def clear_dataloader(dataloader):
     try:
         if hasattr(dataloader, '_iterator') and dataloader._iterator is not None:
             del dataloader._iterator
@@ -149,12 +193,12 @@ def clear_memory(print_summary=True, stage="After Cleanup"):
             if freed_allocated > 0.01 or freed_reserved > 0.01:  # 10MB 이상만 표시
                 print(f" > Freed: {freed_allocated:.2f} GB allocated, {freed_reserved:.2f} GB reserved")
 
-            print_memory_summary(stage)
+            print_memory(stage)
 
         torch.cuda.reset_peak_memory_stats()
 
 
-def print_memory_summary(stage=""):
+def print_memory(stage=""):
     if not torch.cuda.is_available():
         return
 

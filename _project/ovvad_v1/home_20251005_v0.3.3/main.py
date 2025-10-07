@@ -1,51 +1,48 @@
-from train import train, train_models
+""" Available model types (from Anomlaib): version 1.0
 
+1. Memory-based models:
+  - [O] PaDim(2020): "padim"
+  - [O] PatchCore(2022): "patchcore"
+  - [X] DFKDE(2022)
+
+2. Nomalizing Flow-based models:
+  - [O] CFlow(2021): "cflow-resnet18", "cflow-resnet50"
+  - [O] FastFlow(2021): "fastflow-resnet50", "fastflow-cait", "fastflow-deit"
+  - [O] CSFlow(2021): "csflow"
+  - [O] UFlow(2022): "uflow-resnet50", "uflow-mcait"
+
+3. Knowledge Distillation models:
+  - [O] STFPM(2021): "stfpm"
+  - [O] FRE(2023): "fre"
+  - [O] Reverse Distillation(2022): "reverse-distillation"
+  - [O] EfficientAD(2024): "efficientad-small", "efficientad-medium"
+
+4. Reconstruction-based models:
+  - [X] Autoencoer: "autoencoder"
+  - [X] GANomaly(2018)
+  - [O] DRAEM(2021): "draem"
+  - [X] DSR(2022)
+
+5. Feature Adaptation models:
+  - [O] DFM(2019): "dfm"
+  - [O] CFA(2022): "cfa"
+"""
+
+from train import train_models, set_globals, print_globals
 
 if __name__ == "__main__":
-    dataset_type, category = "mvtec", "tile"
-
-    #############################################################
-    # 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
-    #############################################################
-
-    # train(dataset_type, category, "padim", num_epochs=1)
-    # train(dataset_type, category, "patchcore", num_epochs=1)
-
-    #############################################################
-    # 2. Nomalizing Flow-based: CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
-    #############################################################
-
-    # train(dataset_type, category, "cflow-resnet18", num_epochs=3)
-    # train(dataset_type, category, "cflow-resnet50", num_epochs=3)
-    # train(dataset_type, category, "fastflow-resnet50", num_epochs=10)
-    # train(dataset_type, category, "fastflow-cait", num_epochs=5)
-    # train(dataset_type, category, "fastflow-deit", num_epochs=10)
-    # train(dataset_type, category, "csflow", num_epochs=10)
-    # train(dataset_type, category, "uflow-resnet50", num_epochs=10)
-    # train(dataset_type, category, "uflow-mcait", num_epochs=10)
-
-    #############################################################
-    # 3. Knowledge Distillation: STFPM(2021), FRE(2023), Reverse Distillation(2022), EfficientAD(2024)
-    #############################################################
-
-    # train(dataset_type, category, "stfpm", num_epochs=50)
-    # train(dataset_type, category, "fre", num_epochs=50)
-    # train(dataset_type, category, "efficientad-small", num_epochs=10)
-    # train(dataset_type, category, "efficientad-medium", num_epochs=10)
-    # train(dataset_type, category, "reverse-distillation", num_epochs=50)
-
-    #############################################################
-    # 4. Reconstruction-based: GANomaly(2018), DRAEM(2021), DSR(2022)
-    #############################################################
-
-    # train(dataset_type, category, "autoencoder", num_epochs=50)
-    # train(dataset_type, category, "draem", num_epochs=10)
-
-    #############################################################
-    # 5. Feature Adaptation: DFM(2019), CFA(2022)
-    #############################################################
-
-    # train(dataset_type, category, "dfm")
-    # train(dataset_type, category, "cfa")
-
-    train_models(dataset_type, category, model_list=["fre", "stfpm"])
+    
+    set_globals(
+        dataset_dir="/mnt/d/datasets",
+        backbone_dir="/mnt/d/backbones",
+        output_dir="/mnt/d/outputs",
+        seed=42,
+        num_workers=8,
+        pin_memory=True,
+        persistent_workers=True
+    )
+    print_globals()
+    
+    dataset_type, category = "mvtec", "wood"
+    model_list = ["stfpm", "fastflow-resnet50"]
+    train_models(dataset_type, category, model_list)

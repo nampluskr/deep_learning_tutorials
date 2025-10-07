@@ -177,13 +177,13 @@ def register_all_models():
         dict(model_size="small"),
         dict(num_epochs=10, batch_size=1, normalize=False, img_size=256)
     )
-    ModelRegistry.register("efficientad-medium", "models.model_efficientad.EfficientAdTrainer",
-        dict(model_size="medium"),
-        dict(num_epochs=10, batch_size=1, normalize=False, img_size=256)
-    )
     ModelRegistry.register("reverse-distillation", "models.model_reverse_distillation.ReverseDistillationTrainer",
         dict(backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"]),
         dict(num_epochs=50, batch_size=8, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("efficientad-medium", "models.model_efficientad.EfficientAdTrainer",
+        dict(model_size="medium"),
+        dict(num_epochs=10, batch_size=1, normalize=False, img_size=256)
     )
 
     #############################################################
