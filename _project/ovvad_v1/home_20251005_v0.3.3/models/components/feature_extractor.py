@@ -56,9 +56,9 @@ def get_local_weight_path(backbone: str):
     filename = BACKBONE_WEIGHT_FILES.get(backbone, f"{backbone}.pth")
     weight_path = os.path.join(BACKBONE_DIR, filename)
     if os.path.isfile(weight_path):
-        print(f" > [Info] {backbone} weight is found in {weight_path}.")
+        print(f" > {backbone} weight is loaded from {weight_path}.")
     else:
-        print(f" > [Warning] {backbone} weight not found in {weight_path}. ")
+        print(f" > {backbone} weight not found in {weight_path}. ")
     return weight_path
 
 
@@ -80,6 +80,7 @@ def get_transformer_weight_path(backbone: str, cache_subdir: str):
 def set_backbone_dir(backbone_dir):
     global BACKBONE_DIR
     BACKBONE_DIR = backbone_dir
+    print()
     print(f" > Backbone directory set to: {BACKBONE_DIR}")
 
 

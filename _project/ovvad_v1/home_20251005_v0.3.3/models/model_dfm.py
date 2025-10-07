@@ -179,7 +179,7 @@ class DFMTrainer(BaseTrainer):
         self.model.train()  # Set to train mode to store features
         self.model.memory_bank = []  # Reset memory bank
 
-        print("\n > Extracting features from training data...")
+        print(" > Extracting features from training data...")
         pbar = tqdm(loader, desc=" > Extracting", leave=False, ascii=True)
         for batch in pbar:
             imgs = batch["image"].to(self.device)

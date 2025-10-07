@@ -1,6 +1,18 @@
-# Anomalib Image Models
+## Project
 
-## 1. Memory-Based / Feature Matching
+```
+project/
+├── main.py               # 실행 스크립트 (실험 설정 및 실행)
+├── train.py              # 학습 관련 함수들 (train, train_models, 유틸리티)
+├── registry.py           # 모델 레지스트리
+├── dataloader.py         # 데이터로더
+└── models/               # 모델들
+```
+
+
+## Anomalib Image Models
+
+### 1. Memory-Based / Feature Matching
 
 - [x] PaDiM (2020): A Patch Distribution Modeling Framework for Anomaly Detection and Localization
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/padim
@@ -18,7 +30,7 @@
   - github.com/openvinotoolkit/anomalib
 
 
-## 2. Normalizing Flow
+### 2. Normalizing Flow
 
 - [x] CFLOW (2021): Real-Time Unsupervised Anomaly Detection via Conditional Normalizing Flows
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/cflow
@@ -41,7 +53,7 @@
   - https://arxiv.org/abs/2211.12353
 
 
-## 3. Knowledge Distillation
+### 3. Knowledge Distillation
 
 - [x] STFPM (2021): Student-Teacher Feature Pyramid Matching for anomaly detection
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/stfpm
@@ -64,7 +76,7 @@
   - https://arxiv.org/pdf/2303.14535.pdf
 
 
-## 4. Reconstruction-Based
+### 4. Reconstruction-Based
 
 - [x] GANomaly (2018): Semi-Supervised Anomaly Detection via Adversarial Training
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/ganomaly
@@ -82,7 +94,7 @@
   - https://link.springer.com/chapter/10.1007/978-3-031-19821-2_31
 
 
-## 5. Feature Adaptation
+### 5. Feature Adaptation
 
 - [ ] DFM (2019): Deep Feature Modeling (DFM) for anomaly detection
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/dfm
@@ -94,7 +106,7 @@
   - https://anomalib.readthedocs.io/en/v2.1.0/markdown/guides/reference/models/image/cfa.html
   - https://arxiv.org/abs/2206.04325
 
-## 6. Foundation Models - latest
+### 6. Foundation Models - latest
 
 - [ ] WinCLIP (2023): Zero-/Few-Shot Anomaly Classification and Segmentation
   - https://github.com/open-edge-platform/anomalib/tree/main/src/anomalib/models/image/winclip

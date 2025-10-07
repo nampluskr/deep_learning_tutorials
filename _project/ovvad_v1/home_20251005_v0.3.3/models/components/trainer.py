@@ -178,7 +178,7 @@ class BaseTrainer:
     def on_validation_end(self, valid_results, scores, labels):
         self.valid_info = ", ".join([f'{k}={v:.3f}' for k, v in valid_results.items()])
         elapsed_time = time() - self.epoch_start_time
-        epoch_info = f" [{self.epoch:3d}/{self.num_epochs}]"
+        epoch_info = f"[{self.epoch:3d}/{self.num_epochs}]"
         print(f" {epoch_info} {self.train_info} | {self.valid_info} ({elapsed_time:.1f}s)")
 
         for name, value in valid_results.items():
