@@ -56,3 +56,4 @@ if __name__ == "__main__":
         categories=["01", "02", "03"],
         models=["stfpm"]
     )
+
