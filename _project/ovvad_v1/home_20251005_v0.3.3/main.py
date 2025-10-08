@@ -31,7 +31,7 @@
 from train import train, train_models, set_globals, print_globals
 
 if __name__ == "__main__":
-    
+
     set_globals(
         dataset_dir="/mnt/d/datasets",
         backbone_dir="/mnt/d/backbones",
@@ -42,9 +42,12 @@ if __name__ == "__main__":
         persistent_workers=True
     )
     print_globals()
-    
+
     dataset_type, category = "mvtec", "wood"
-    # models = ["stfpm", "fastflow-resnet50"]
-    train_models(dataset_type, categories=["wood", "grid", "tile"], models=["stfpm"])
-    
     # train(dataset_type, category, "fre", num_epochs=10)
+
+    train_models(dataset_type,
+        categories=["wood", "grid", "tile"],
+        models=["reverse-distillation", "fastflow-resnet50", "patchcore"]
+    )
+

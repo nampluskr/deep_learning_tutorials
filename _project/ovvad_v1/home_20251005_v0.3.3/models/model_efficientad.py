@@ -487,8 +487,8 @@ class EfficientAdTrainer(BaseTrainer):
         loss = loss_st + loss_ae + loss_stae
         loss.backward()
         self.optimizer.step()
-        results = {"loss": loss.item(), "loss_st": loss_st.item(), 
-                "loss_ae": loss_ae.item(), "loss_stae": loss_stae.item()}
+        results = {"loss": loss.item(), "st": loss_st.item(), 
+                   "ae": loss_ae.item(), "stae": loss_stae.item()}
         return results
         
     def on_validation_start(self, valid_loader):

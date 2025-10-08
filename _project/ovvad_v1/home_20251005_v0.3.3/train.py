@@ -103,8 +103,12 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
         normalize = normalize if normalize is not None else config["normalize"]
 
         print(f"\n{'='*70}")
-        print(f"  Training: {model_type} | {dataset_type}/{category}")
-        print(f"  Epochs: {num_epochs}, Batch Size: {batch_size}, Image Size: {img_size}")
+        print(f"Training: {model_type} | {dataset_type}/{category}")
+        print(f"{'-'*70}\n")
+        print(f"  Max. Epochs: {num_epochs}")
+        print(f"  Batch Size:  {batch_size}")
+        print(f"  Image Size:  {img_size}")
+        print(f"  Normalize:   {normalize}")
         print(f"{'='*70}\n")
 
         # Setup paths
@@ -217,9 +221,6 @@ def print_memory(stage=""):
 
 
 def train_models(dataset_type, categories, models, clear_memory_between=True):
-    if isinstance(categories, str):
-        categories = [categories]
-
     num_categories = len(categories)
     num_models = len(models)
     total_runs = num_categories * num_models
@@ -340,8 +341,8 @@ if __name__ == "__main__":
 
     # train(dataset_type, category, "stfpm", num_epochs=50)
     # train(dataset_type, category, "fre", num_epochs=50)
-    # train(dataset_type, category, "efficientad-small", num_epochs=10)
-    # train(dataset_type, category, "efficientad-medium", num_epochs=10)
+    # train(dataset_type, category, "efficientad-small", num_epochs=20)
+    # train(dataset_type, category, "efficientad-medium", num_epochs=20)
     # train(dataset_type, category, "reverse-distillation", num_epochs=50)
 
     #############################################################
