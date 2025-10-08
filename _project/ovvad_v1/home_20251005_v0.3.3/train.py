@@ -18,11 +18,11 @@ PIN_MEMORY = True
 PERSISTENT_WORKERS = True
 
 
-def set_globals(dataset_dir=None, backbone_dir=None, output_dir=None, 
+def set_globals(dataset_dir=None, backbone_dir=None, output_dir=None,
                seed=None, num_workers=None, pin_memory=None, persistent_workers=None):
     global DATASET_DIR, BACKBONE_DIR, OUTPUT_DIR, SEED
     global NUM_WORKERS, PIN_MEMORY, PERSISTENT_WORKERS
-    
+
     if dataset_dir is not None:
         DATASET_DIR = dataset_dir
     if backbone_dir is not None:
@@ -56,10 +56,10 @@ def print_globals():
     config = get_globals()
     print("\n" + "="*70)
     print("Training Configuration")
-    print("="*70)
+    print("-"*70)
     for key, value in config.items():
         print(f"  {key:20s}: {value}")
-    print("="*70 + "\n")
+    print("-"*70 )
 
 
 def set_seed(seed=42):
@@ -131,11 +131,10 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
         trainer.fit(train_loader, num_epochs, valid_loader=test_loader, weight_path=weight_path)
         print_memory("After Training")
 
-        # Save anomaly maps
-        trainer.test(test_loader, result_dir=result_dir, desc=desc, normalize=normalize,
-            skip_normal=True, num_max=20)
-        trainer.test(test_loader, result_dir=result_dir, desc=desc, normalize=normalize,
-            skip_anomaly=True, num_max=20)
+        # Save test results and images
+        trainer.save_results(test_loader, result_dir=result_dir, desc=desc)
+        trainer.save_histogram(test_loader, result_dir=result_dir, desc=desc)
+        trainer.save_maps(test_loader, result_dir=result_dir, desc=desc, normalize=normalize)
 
     except Exception as e:
         print(f"\n{'!'*70}")
@@ -217,47 +216,103 @@ def print_memory(stage=""):
     print(f"{'-'*70}")
 
 
-def train_models(dataset_type, category, model_list, clear_memory_between=True):
-    num_models = len(model_list)
-    results = []
-    for idx, model_type in enumerate(model_list, 1):
-        print(f"{'='*70}")
-        print(f"  Training: [{idx}/{num_models}] {model_type} | {dataset_type}/{category}")
-        print(f"{'='*70}")
+def train_models(dataset_type, categories, models, clear_memory_between=True):
+    if isinstance(categories, str):
+        categories = [categories]
 
-        try:
-            train(dataset_type, category, model_type)
-            results.append({"model": model_type, "status": "success"})
+    num_categories = len(categories)
+    num_models = len(models)
+    total_runs = num_categories * num_models
 
-            if clear_memory_between and idx < num_models:
-                print("\n > Additional memory cleanup between models...\n")
-                clear_memory(print_summary=False)
-                import time
-                time.sleep(1)
+    print(f"\n{'='*70}")
+    print(f"  Training {num_models} model(s) on {num_categories} category(ies)")
+    print(f"  Total runs: {total_runs}")
+    print(f"{'='*70}\n")
 
-        except Exception as e:
-            print(f"\n[ERROR] Failed to train {model_type}: {e}")
-            results.append({"model": model_type, "status": "failed", "error": str(e)})
+    all_results = []
+    run_count = 0
+    for cat_idx, category in enumerate(categories, 1):
+        print(f"\n{'#'*70}")
+        print(f"# Category [{cat_idx}/{num_categories}]: {category}")
+        print(f"{'#'*70}\n")
 
-    print(f"\n{'Training Summary':-^70}")
-    success_count = sum(1 for r in results if r["status"] == "success")
-    failed_count = sum(1 for r in results if r["status"] == "failed")
+        category_results = []
+        for model_type in models:
+            run_count += 1
+            print(f"{'='*70}")
+            print(f"  Run [{run_count}/{total_runs}]: {model_type} | {dataset_type}/{category}")
+            print(f"{'='*70}")
 
-    print(f"  Total Models:    {num_models}")
+            try:
+                train(dataset_type, category, model_type)
+                result = {
+                    "dataset": dataset_type,
+                    "category": category,
+                    "model": model_type,
+                    "status": "success"
+                }
+                category_results.append(result)
+                all_results.append(result)
+
+                if clear_memory_between and run_count < total_runs:
+                    print("\n > Additional memory cleanup between runs...\n")
+                    clear_memory(print_summary=False)
+                    import time
+                    time.sleep(1)
+
+            except Exception as e:
+                print(f"\n{'!'*70}")
+                print(f"[ERROR] Failed to train {model_type}: {e}")
+                print(f"{'!'*70}\n")
+                import traceback
+                traceback.print_exc()
+
+                result = {
+                    "dataset": dataset_type,
+                    "category": category,
+                    "model": model_type,
+                    "status": "failed",
+                    "error": str(e)
+                }
+                category_results.append(result)
+                all_results.append(result)
+
+        # Print category summary
+        cat_success = sum(1 for r in category_results if r["status"] == "success")
+        cat_failed = sum(1 for r in category_results if r["status"] == "failed")
+
+        print(f"\n{f'Category Summary: {category}':-^70}")
+        print(f"  Models:          {len(category_results)}")
+        print(f"  Successful:      {cat_success}")
+        print(f"  Failed:          {cat_failed}")
+        print(f"{'='*70}\n")
+
+    # Print overall summary
+    print(f"\n{'='*70}")
+    print(f"{'OVERALL TRAINING SUMMARY':^70}")
+    print(f"{'='*70}")
+
+    success_count = sum(1 for r in all_results if r["status"] == "success")
+    failed_count = sum(1 for r in all_results if r["status"] == "failed")
+
+    print(f"  Total Runs:      {total_runs}")
     print(f"  Successful:      {success_count}")
     print(f"  Failed:          {failed_count}")
+    print(f"  Success Rate:    {success_count/total_runs*100:.1f}%")
 
     if failed_count > 0:
-        print(f"\n  Failed Models:")
-        for result in results:
+        print(f"\n  Failed Runs:")
+        for result in all_results:
             if result["status"] == "failed":
-                print(f"    - {result['model']}: {result.get('error', 'Unknown error')}")
-    print(f"{'='*70}")
-    return results
+                error_msg = result.get('error', 'Unknown error')
+                print(f"    - {result['dataset']}/{result['category']}/{result['model']}: {error_msg}")
+
+    print(f"{'='*70}\n")
+    return all_results
 
 
 if __name__ == "__main__":
-    dataset_type, category = "mvtec", "tile"
+    dataset_type, category = "mvtec", "grid"
 
     #############################################################
     # 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
@@ -303,4 +358,4 @@ if __name__ == "__main__":
     # train(dataset_type, category, "dfm")
     # train(dataset_type, category, "cfa")
 
-    train_models(dataset_type, category, model_list=["fre", "stfpm"])
+    train_models(dataset_type, categories=[category], models=["fre", "stfpm"])

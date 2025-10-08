@@ -28,7 +28,7 @@
   - [O] CFA(2022): "cfa"
 """
 
-from train import train_models, set_globals, print_globals
+from train import train, train_models, set_globals, print_globals
 
 if __name__ == "__main__":
     
@@ -44,5 +44,7 @@ if __name__ == "__main__":
     print_globals()
     
     dataset_type, category = "mvtec", "wood"
-    model_list = ["stfpm", "fastflow-resnet50"]
-    train_models(dataset_type, category, model_list)
+    # models = ["stfpm", "fastflow-resnet50"]
+    train_models(dataset_type, categories=["wood", "grid", "tile"], models=["stfpm"])
+    
+    # train(dataset_type, category, "fre", num_epochs=10)

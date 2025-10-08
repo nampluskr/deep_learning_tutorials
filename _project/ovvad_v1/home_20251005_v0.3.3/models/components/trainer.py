@@ -1,16 +1,16 @@
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+from time import time
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_auc_score, average_precision_score
-from sklearn.metrics import f1_score, roc_curve
-from skimage import measure
-from torchvision.transforms.functional import to_pil_image
-from tqdm import tqdm
-from time import time
-from abc import ABC, abstractmethod
+
+from sklearn.metrics import roc_curve, roc_auc_score, average_precision_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import confusion_matrix
 
 import matplotlib
 matplotlib.use('Agg')  # Use 'Agg' backend for non-GUI environments
@@ -194,11 +194,12 @@ class BaseTrainer:
                     print(f"\n > Early stopping triggered! Best AUROC: {self.early_stopper_auroc.best_score:.3f}")
 
         if self.epoch % self.eval_period == 0:
-            threshold = compute_threshold(scores, labels, method="f1")
+            method = "f1"
+            threshold = compute_threshold(scores, labels, method=method)
             eval_results = evaluate_classification(scores, labels, threshold)
             eval_info1 = ", ".join([f"{k}={v:.3f}" for k, v in eval_results.items() if isinstance(v, float)])
             eval_info2 = ", ".join([f"{k.upper()}={v}" for k, v in eval_results.items() if isinstance(v, int)])
-            print(f" > {eval_info1} ({eval_info2})\n")
+            print(f" > {eval_info1} | {eval_info2} ({method})\n")
 
     #############################################################
     # Hooks for fitting process
@@ -304,7 +305,7 @@ class BaseTrainer:
     #############################################################
 
     @torch.no_grad()
-    def test(self, test_loader, result_dir=None, show_image=False, desc=None,
+    def save_maps(self, test_loader, result_dir=None,  desc=None, show_image=False,
             skip_normal=False, skip_anomaly=False, num_max=-1, normalize=True):
 
         if result_dir is not None:
@@ -373,35 +374,298 @@ class BaseTrainer:
             if num_max > 0 and num_saved >= num_max:
                 break
 
+        if result_dir is not None and num_saved > 0:
+            print(f" > Saved {num_saved} anomaly maps to {result_dir}")
+
+    @torch.no_grad()
+    def save_histogram(self, test_loader, result_dir=None, desc=None, show_image=False,):
+        import seaborn as sns
+
+        if result_dir is not None:
+            os.makedirs(result_dir, exist_ok=True)
+
+        self.model.eval()
+        all_scores = []
+        all_labels = []
+
+        for batch in test_loader:
+            labels = batch["label"].cpu().numpy()
+            images = batch["image"].to(self.device)
+
+            prediction = self.model(images)
+            scores = prediction["pred_score"].cpu().numpy()
+
+            all_scores.append(scores)
+            all_labels.append(labels)
+
+        all_scores = np.concatenate(all_scores).ravel()
+        all_labels = np.concatenate(all_labels).ravel()
+        normal_scores = all_scores[all_labels == 0]
+        anomaly_scores = all_scores[all_labels == 1]
+
+        thresholds = {}
+        thresholds['f1'] = compute_threshold(all_scores, all_labels, method="f1")
+        thresholds['f1_uniform'] = compute_threshold(all_scores, all_labels, method="f1_uniform")
+        thresholds['roc'] = compute_threshold(all_scores, all_labels, method="roc")
+        thresholds['percentile'] = compute_threshold(all_scores, all_labels, method="percentile")
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+        bins = 50
+
+        if len(normal_scores) > 0:
+            sns.histplot(normal_scores, bins=bins, kde=True, color='blue',
+                         label=f'Normal (n={len(normal_scores)})',
+                         alpha=0.6, edgecolor='black', ax=ax)
+        if len(anomaly_scores) > 0:
+            sns.histplot(anomaly_scores, bins=bins, kde=True, color='red',
+                         label=f'Anomaly (n={len(anomaly_scores)})',
+                         alpha=0.6, edgecolor='black', ax=ax)
+
+        colors = {'f1': 'green', 'f1_uniform': 'lime', 'roc': 'purple', 'percentile': 'orange'}
+        linestyles = {'f1': '-', 'f1_uniform': ':', 'roc': '--', 'percentile': '-.'}
+
+        for method, threshold in thresholds.items():
+            label_name = method.replace('_', ' ').upper()
+            ax.axvline(threshold, color=colors[method], linestyle=linestyles[method],
+                    linewidth=2, label=f'{label_name}: {threshold:.4f}')
+
+        ax.set_xlabel('Anomaly Score', fontsize=12)
+        ax.set_ylabel('Frequency', fontsize=12)
+        ax.set_title('Distribution of Anomaly Scores with Thresholds', fontsize=14, fontweight='bold')
+        ax.legend(loc='upper right', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+
+        if result_dir is not None:
+            prefix = f"{desc}_" if desc else ""
+            filename = f"histogram_{prefix}scores.png"
+            filepath = os.path.join(result_dir, filename)
+            fig.savefig(filepath, dpi=150, bbox_inches='tight')
+            print(f" > Saved histogram to {filepath}")
+
+        if show_image: plt.show()
+        plt.close(fig)
+
+    @torch.no_grad()
+    def save_results(self, test_loader, result_dir=None, desc=None):
+        if result_dir is not None:
+            os.makedirs(result_dir, exist_ok=True)
+
+        self.model.eval()
+        all_scores = []
+        all_labels = []
+
+        for batch in test_loader:
+            labels = batch["label"].cpu().numpy()
+            images = batch["image"].to(self.device)
+
+            prediction = self.model(images)
+            scores = prediction["pred_score"].cpu().numpy()
+
+            all_scores.append(scores)
+            all_labels.append(labels)
+
+        # Concatenate all batches
+        all_scores = np.concatenate(all_scores).ravel()
+        all_labels = np.concatenate(all_labels).ravel()
+
+        # Separate normal and anomaly scores
+        normal_scores = all_scores[all_labels == 0]
+        anomaly_scores = all_scores[all_labels == 1]
+
+        # Compute AUROC and AUPR
+        auroc = roc_auc_score(all_labels, all_scores)
+        aupr = average_precision_score(all_labels, all_scores)
+
+        # Compute thresholds using different methods
+        thresholds = {}
+        thresholds['f1'] = compute_threshold(all_scores, all_labels, method="f1")
+        thresholds['f1_uniform'] = compute_threshold(all_scores, all_labels, method="f1_uniform")
+        thresholds['roc'] = compute_threshold(all_scores, all_labels, method="roc")
+        thresholds['percentile'] = compute_threshold(all_scores, all_labels, method="percentile")
+
+        if result_dir is not None:
+            prefix = f"{desc}_" if desc else ""
+            txt_filename = f"results_{prefix}thresholds.txt"
+            txt_filepath = os.path.join(result_dir, txt_filename)
+
+            # Write results to file
+            with open(txt_filepath, 'w') as f:
+                f.write("="*70 + "\n")
+                f.write("ANOMALY DETECTION RESULTS\n")
+                f.write("="*70 + "\n\n")
+
+                # Overall Performance Metrics (AUROC & AUPR)
+                f.write("Overall Performance Metrics\n")
+                f.write("-"*70 + "\n")
+                f.write(f"{'AUROC (ROC-AUC)':25s}: {auroc:12.6f} ({auroc*100:6.2f}%)\n")
+                f.write(f"{'AUPR (AP)':25s}: {aupr:12.6f} ({aupr*100:6.2f}%)\n")
+                f.write("\n\n")
+
+                # Threshold values
+                f.write("Threshold Values\n")
+                f.write("-"*70 + "\n")
+                f.write(f"{'Method':25s}  {'Threshold':>12s}\n")
+                f.write("-"*70 + "\n")
+                f.write(f"{'F1 (Percentile)':25s}: {thresholds['f1']:12.6f}\n")
+                f.write(f"{'F1 (Uniform)':25s}: {thresholds['f1_uniform']:12.6f}\n")
+                f.write(f"{'ROC (Youden J)':25s}: {thresholds['roc']:12.6f}\n")
+                f.write(f"{'Percentile (95%)':25s}: {thresholds['percentile']:12.6f}\n")
+                f.write("\n\n")
+
+                # Classification results for each method
+                f.write("Classification Results by Threshold Method\n")
+                f.write("="*70 + "\n\n")
+
+                for method_name, threshold in thresholds.items():
+                    # Compute predictions
+                    predictions = (all_scores >= threshold).astype(int)
+
+                    # Compute metrics
+                    acc = accuracy_score(all_labels, predictions)
+                    prec = precision_score(all_labels, predictions, zero_division=0)
+                    rec = recall_score(all_labels, predictions, zero_division=0)
+                    f1 = f1_score(all_labels, predictions, zero_division=0)
+
+                    # Confusion matrix
+                    tn, fp, fn, tp = confusion_matrix(all_labels, predictions).ravel()
+
+                    # Write method results
+                    method_display = method_name.replace('_', ' ').upper()
+                    f.write(f"Method: {method_display}\n")
+                    f.write(f"Threshold: {threshold:.6f}\n")
+                    f.write("-"*70 + "\n")
+
+                    # Metrics
+                    f.write(f"{'Accuracy':20s}: {acc:8.4f} ({acc*100:6.2f}%)\n")
+                    f.write(f"{'Precision':20s}: {prec:8.4f} ({prec*100:6.2f}%)\n")
+                    f.write(f"{'Recall (TPR)':20s}: {rec:8.4f} ({rec*100:6.2f}%)\n")
+                    f.write(f"{'F1 Score':20s}: {f1:8.4f}\n")
+                    f.write("\n")
+
+                    # Confusion Matrix
+                    f.write("Confusion Matrix:\n")
+                    f.write(f"                 Predicted Normal  Predicted Anomaly\n")
+                    f.write(f"Actual Normal    {tn:16d}  {fp:17d}\n")
+                    f.write(f"Actual Anomaly   {fn:16d}  {tp:17d}\n")
+                    f.write("\n")
+
+                    # Additional metrics
+                    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+                    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+                    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0.0
+
+                    f.write(f"{'True Positives  (TP)':20s}: {tp:8d}\n")
+                    f.write(f"{'False Negatives (FN)':20s}: {fn:8d}\n")
+                    f.write(f"{'True Negatives  (TN)':20s}: {tn:8d}\n")
+                    f.write(f"{'False Positives (FP)':20s}: {fp:8d}\n")
+                    f.write(f"{'Specificity (TNR)':20s}: {specificity:8.4f}\n")
+                    f.write(f"{'False Positive Rate':20s}: {fpr:8.4f}\n")
+                    f.write(f"{'False Negative Rate':20s}: {fnr:8.4f}\n")
+                    f.write("\n" + "="*70 + "\n\n")
+
+                # Score statistics
+                f.write("Score Statistics\n")
+                f.write("="*70 + "\n")
+                f.write(f"Normal Samples (n={len(normal_scores)})\n")
+                f.write("-"*70 + "\n")
+                f.write(f"  {'Mean':10s}: {normal_scores.mean():10.6f}\n")
+                f.write(f"  {'Std':10s}: {normal_scores.std():10.6f}\n")
+                f.write(f"  {'Min':10s}: {normal_scores.min():10.6f}\n")
+                f.write(f"  {'Max':10s}: {normal_scores.max():10.6f}\n")
+                f.write(f"  {'Median':10s}: {np.median(normal_scores):10.6f}\n")
+                f.write(f"  {'Q1':10s}: {np.percentile(normal_scores, 25):10.6f}\n")
+                f.write(f"  {'Q3':10s}: {np.percentile(normal_scores, 75):10.6f}\n")
+                f.write("\n")
+
+                f.write(f"Anomaly Samples (n={len(anomaly_scores)})\n")
+                f.write("-"*70 + "\n")
+                f.write(f"  {'Mean':10s}: {anomaly_scores.mean():10.6f}\n")
+                f.write(f"  {'Std':10s}: {anomaly_scores.std():10.6f}\n")
+                f.write(f"  {'Min':10s}: {anomaly_scores.min():10.6f}\n")
+                f.write(f"  {'Max':10s}: {anomaly_scores.max():10.6f}\n")
+                f.write(f"  {'Median':10s}: {np.median(anomaly_scores):10.6f}\n")
+                f.write(f"  {'Q1':10s}: {np.percentile(anomaly_scores, 25):10.6f}\n")
+                f.write(f"  {'Q3':10s}: {np.percentile(anomaly_scores, 75):10.6f}\n")
+                f.write("\n")
+
+                # Separation metrics
+                f.write("Separation Metrics\n")
+                f.write("-"*70 + "\n")
+                mean_diff = anomaly_scores.mean() - normal_scores.mean()
+                f.write(f"{'Mean Difference':25s}: {mean_diff:10.6f}\n")
+
+                # Cohen's d (effect size)
+                pooled_std = np.sqrt(((len(normal_scores) - 1) * normal_scores.std()**2 +
+                                    (len(anomaly_scores) - 1) * anomaly_scores.std()**2) /
+                                    (len(normal_scores) + len(anomaly_scores) - 2))
+                cohens_d = mean_diff / pooled_std if pooled_std > 0 else 0.0
+
+                cohens_label = "Cohen's d (effect size)"
+                f.write(f"{cohens_label:25s}: {cohens_d:10.6f}\n")
+
+                # Overlap
+                overlap_count = np.sum((normal_scores > anomaly_scores.min()) &
+                                    (normal_scores < anomaly_scores.max()))
+                overlap_pct = overlap_count / len(normal_scores) * 100 if len(normal_scores) > 0 else 0.0
+                f.write(f"{'Score Overlap':25s}: {overlap_pct:9.2f}%\n")
+                f.write("\n" + "="*70 + "\n")
+
+            print(f" > Saved results to {txt_filepath}")
+
+
 #############################################################
 # Helper functions
 #############################################################
 
 def compute_threshold(scores, labels, method="f1", percentile=95):
-    labels_np = labels.cpu().numpy()
-    scores_np = scores.cpu().numpy()
+    if isinstance(scores, torch.Tensor):
+        scores = scores.cpu().numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.cpu().numpy()
 
     if method == "f1":
-        thresholds = np.percentile(scores_np, np.linspace(1, 99.9, 200))
+        # Percentile-based: More samples where scores are concentrated
+        thresholds = np.percentile(scores, np.linspace(1, 99.9, 200))
         best_f1, best_threshold = 0.0, 0.5
+
         for thr in thresholds:
-            preds = (scores_np >= thr).astype(int)
-            f1 = f1_score(labels_np, preds)
+            preds = (scores >= thr).astype(int)
+            f1 = f1_score(labels, preds, zero_division=0)
             if f1 > best_f1:
                 best_f1, best_threshold = f1, thr
+
         return float(best_threshold)
 
-    elif method == "roc":
-        fpr, tpr, thresholds = roc_curve(labels_np, scores_np)
-        optimal_idx = np.argmax(tpr - fpr)
-        return float(thresholds[optimal_idx])
+    elif method == "f1_uniform":
+        # Uniform sampling: Equal intervals across score range
+        thresholds = np.linspace(scores.min(), scores.max(), 1000)
+        f1_scores = []
 
-    else:  # "percentile"
-        normal_mask = labels_np == 0
-        if normal_mask.sum() == 0:
-            return float(np.percentile(scores_np, 95))
-        normal_scores = scores_np[normal_mask]
-        return float(np.percentile(normal_scores, percentile))
+        for threshold in thresholds:
+            predictions = (scores >= threshold).astype(int)
+            f1 = f1_score(labels, predictions, zero_division=0)
+            f1_scores.append(f1)
+
+        best_idx = np.argmax(f1_scores)
+        return float(thresholds[best_idx])
+
+    elif method == "roc":
+        # Use Youden's J statistic (maximize TPR - FPR)
+        fpr, tpr, thresholds = roc_curve(labels, scores)
+        j_scores = tpr - fpr
+        best_idx = np.argmax(j_scores)
+        return thresholds[best_idx]
+
+    elif method == "percentile":
+        # Use 95th percentile of normal scores
+        normal_scores = scores[labels == 0]
+        if len(normal_scores) == 0:
+            return scores.mean()
+        return np.percentile(normal_scores, percentile)
+
+    else:
+        raise ValueError(f"Unknown method: {method}. Choose from 'f1', 'roc', 'percentile'")
 
 
 def evaluate_classification(scores, labels, threshold):
@@ -441,5 +705,3 @@ def check_shape(img):
         else:
             raise ValueError(f"Invalid shape for 3D array: {img.shape}")
     raise ValueError(f"Unsupported image shape: {img.shape}")
-
-
