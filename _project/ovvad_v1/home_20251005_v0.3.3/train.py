@@ -104,7 +104,7 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
 
         print(f"\n{'='*70}")
         print(f"Training: {model_type} | {dataset_type}/{category}")
-        print(f"{'-'*70}\n")
+        print(f"{'-'*70}")
         print(f"  Max. Epochs: {num_epochs}")
         print(f"  Batch Size:  {batch_size}")
         print(f"  Image Size:  {img_size}")

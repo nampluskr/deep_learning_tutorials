@@ -107,8 +107,8 @@ def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
 def register_all_models():
     """Register all available anomaly detection models.
     
-    This function registers all implemented models with their default
-    configurations. It should be called once at module import time.
+    This function registers all implemented models with their default configurations. 
+    It should be called once at module import time.
     """
     
     #############################################################
