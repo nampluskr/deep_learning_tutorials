@@ -199,7 +199,7 @@ class BaseTrainer:
             eval_results = evaluate_classification(scores, labels, threshold)
             eval_info1 = ", ".join([f"{k}={v:.3f}" for k, v in eval_results.items() if isinstance(v, float)])
             eval_info2 = ", ".join([f"{k.upper()}={v}" for k, v in eval_results.items() if isinstance(v, int)])
-            print(f" > {eval_info1} | {eval_info2} ({method})\n")
+            print(f" > {eval_info1} | {eval_info2}\n")
 
     #############################################################
     # Hooks for fitting process
@@ -316,7 +316,10 @@ class BaseTrainer:
         for batch in test_loader:
             labels = batch["label"].cpu().numpy()
             images = batch["image"].to(self.device)
+            defect_types = batch["defect_type"]
+            categories = batch["category"]
             masks = batch["mask"].cpu().numpy() if "mask" in batch else None
+            has_mask = batch["has_mask"][0].item() if "has_mask" in batch else True
 
             prediction = self.model(images)
             anomaly_maps = prediction["anomaly_map"].cpu().numpy()
@@ -325,6 +328,8 @@ class BaseTrainer:
             for i in range(images.size(0)):
                 label = int(labels[i])
                 score = float(scores[i])
+                defect_type = defect_types[i]
+                category = categories[i]
 
                 is_normal = (label == 0)
                 is_anomaly = (label == 1)
@@ -338,21 +343,21 @@ class BaseTrainer:
                 amap = anomaly_maps[i]
                 anomaly_map = (amap - amap.min()) / (amap.max() - amap.min() + 1e-8)
 
-                binary_mask = None
-                if masks is not None:
-                    mask = masks[i]
-                    if mask.ndim == 3 and mask.shape[0] == 1:
-                        mask = mask[0]
-                    binary_mask = mask
+                if has_mask:
+                    binary_mask = None
+                    if masks is not None:
+                        mask = masks[i]
+                        if mask.ndim == 3 and mask.shape[0] == 1:
+                            mask = mask[0]
+                        binary_mask = mask
 
-                if binary_mask is not None:
                     fig, axes = plt.subplots(1, 3, figsize=(12, 3))
-                    titles = [f"Original: {label}", "Mask", f"Anomaly: {score:.4f}"]
+                    titles = [f"{category}: {defect_type}", "Mask", f"Anomaly Score: {score:.4f}"]
                     images_vis = [original, binary_mask, anomaly_map]
                     cmaps = [None, "gray", "jet"]
                 else:
                     fig, axes = plt.subplots(1, 2, figsize=(9, 3))
-                    titles = [f"Original: {label}", f"Anomaly: {score:.4f}"]
+                    titles = [f"{category}: {defect_type}", f"Anomaly Score: {score:.4f}"]
                     images_vis = [original, anomaly_map]
                     cmaps = [None, "jet"]
 

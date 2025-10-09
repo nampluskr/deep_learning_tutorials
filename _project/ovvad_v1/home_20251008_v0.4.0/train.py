@@ -88,22 +88,31 @@ def count_parameters(trainer):
 
 
 def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, img_size=None, normalize=None):
-    """Train a single model with automatic memory cleanup."""
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()
-        # print_memory("Before Training")
 
     try:
-        # Get configuration
         config = get_config(model_type)
         num_epochs = num_epochs or config["num_epochs"]
         img_size = img_size or config["img_size"]
         batch_size = batch_size or config["batch_size"]
         normalize = normalize if normalize is not None else config["normalize"]
 
+        if isinstance(dataset_type, list):
+            dtype_str = "-".join(dataset_type)
+        else:
+            dtype_str = dataset_type
+        
+        if isinstance(category, list):
+            cat_str = "-".join(category)
+        elif category == "all":
+            cat_str = "all"
+        else:
+            cat_str = category
+
         print(f"\n{'='*70}")
-        print(f"Training: {model_type} | {dataset_type}/{category}")
+        print(f"Training: {model_type} | {dtype_str}/{cat_str}")
         print(f"{'-'*70}")
         print(f"  Max. Epochs: {num_epochs}")
         print(f"  Batch Size:  {batch_size}")
@@ -111,31 +120,31 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
         print(f"  Normalize:   {normalize}")
         print(f"{'='*70}\n")
 
-        # Setup paths
-        result_dir = os.path.join(OUTPUT_DIR, dataset_type, category, model_type)
-        desc = f"{dataset_type}_{category}_{model_type}"
-        weight_path=os.path.join(result_dir, f"model_{desc}_epochs-{num_epochs}.pth")
+        result_dir = os.path.join(OUTPUT_DIR, dtype_str, cat_str, model_type)
+        desc = f"{dtype_str}_{cat_str}_{model_type}"
+        weight_path = os.path.join(result_dir, f"model_{desc}_epochs-{num_epochs}.pth")
 
-        # Set seed
         set_seed(seed=SEED)
 
-        # Create dataloaders
-        train_loader, test_loader = get_dataloaders(dataset_type, category,
-            root_dir=os.path.join(DATASET_DIR, dataset_type),
-            img_size=img_size,  batch_size=batch_size,  normalize=normalize,
-            num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, persistent_workers=PERSISTENT_WORKERS)
-        # print_memory("After Dataloader Creation")
+        train_loader, test_loader = get_dataloaders(
+            dataset_dir=DATASET_DIR,
+            dataset_type=dataset_type,
+            category=category,
+            img_size=img_size,
+            batch_size=batch_size,
+            normalize=normalize,
+            num_workers=NUM_WORKERS,
+            pin_memory=PIN_MEMORY,
+            persistent_workers=PERSISTENT_WORKERS
+        )
 
-        # Create trainer
         trainer = get_trainer(model_type, backbone_dir=BACKBONE_DIR, dataset_dir=DATASET_DIR, img_size=img_size)
         count_parameters(trainer)
         print_memory("After Model Creation")
 
-        # Train with validation
         trainer.fit(train_loader, num_epochs, valid_loader=test_loader, weight_path=weight_path)
         print_memory("After Training")
 
-        # Save test results and images
         trainer.save_results(test_loader, result_dir=result_dir, desc=desc)
         trainer.save_histogram(test_loader, result_dir=result_dir, desc=desc)
         trainer.save_maps(test_loader, result_dir=result_dir, desc=desc, normalize=normalize)

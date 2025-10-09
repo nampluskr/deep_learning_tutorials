@@ -43,17 +43,34 @@ if __name__ == "__main__":
     )
     print_globals()
 
+    train("mvtec", "wood", "stfpm", num_epochs=20)
+    train("visa", "macaroni1", "stfpm", num_epochs=20)
+    train("btad", "03", "stfpm", num_epochs=20)
+    
+    set_globals(
+        dataset_dir="/mnt/d/datasets/custom",
+        backbone_dir="/mnt/d/backbones",
+        output_dir="/mnt/d/outputs",
+        seed=42,
+        num_workers=8,
+        pin_memory=True,
+        persistent_workers=True
+    )
+    print_globals()
+    
+    train(["module1"], "tile", "stfpm", num_epochs=20)
+    train(["module1"], ["grid", "tile"], "stfpm", num_epochs=20)
+
     # dataset_type, category = "mvtec", "wood"
-    # train(dataset_type, category, "fre", num_epochs=10)
     # train_models(dataset_type,
     #     categories=["wood", "grid", "tile"],
     #     models=["reverse-distillation", "fastflow-resnet50", "patchcore"]
     # )
 
-    dataset_type, category = "btad", "01"
-    # train(dataset_type, category, "fre", num_epochs=10)
-    train_models(dataset_type,
-        categories=["01", "02", "03"],
-        models=["stfpm"]
-    )
+    # dataset_type, category = "btad", "01"
+    # # train(dataset_type, category, "fre", num_epochs=10)
+    # train_models(dataset_type,
+    #     categories=["01", "02", "03"],
+    #     models=["stfpm"]
+    # )
 
