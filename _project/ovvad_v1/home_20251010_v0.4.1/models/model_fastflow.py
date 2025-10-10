@@ -23,7 +23,7 @@ from torch import nn
 from torch.nn import functional as F  # noqa: N812
 
 from .components.all_in_one_block import AllInOneBlock
-from .components.feature_extractor import get_local_weight_path, get_transformer_weight_path
+from .components.backbone import get_local_weight_path
 
 
 #####################################################################
@@ -126,7 +126,10 @@ class FastflowModel(nn.Module):
 
             if pre_trained:
                 if backbone == "cait_m48_448":
-                    cache_subdir = f"{backbone}.fb_dist_in1k" if backbone == "cait_m48_448" else f"{backbone}.fb_in1k"
+                    cache_subdir = "cait_m48_448.fb_dist_in1k"
+                elif backbone == "deit_base_distilled_patch16_384":
+                    cache_subdir = "deit_base_distilled_patch16_384.fb_in1k"
+
                 weight_path = get_transformer_weight_path(backbone, cache_subdir)
                 if weight_path and os.path.isfile(weight_path):
                     from safetensors.torch import load_file
@@ -275,11 +278,10 @@ from .components.trainer import BaseTrainer, EarlyStopper
 
 class FastflowTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
-                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None, backbone_dir=None, 
+                 scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
                  backbone="wide_resnet50_2", input_size=(256, 256)):
 
         if model is None:
-            super().set_backbone_dir(backbone_dir)
             model = FastflowModel(backbone=backbone, input_size=input_size, pre_trained=True)
         if optimizer is None:
             optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
