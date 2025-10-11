@@ -37,7 +37,7 @@ from .components_dinomaly.dinov2_loader import load as load_dinov2_model
 
 
 #####################################################################
-# anomalib/src/anomalib/models/image/dinomaly/anomaly_map.py
+# anomalib/src/anomalib/models/image/dinomaly/torch_model.py
 #####################################################################
 
 # Encoder architecture configurations for DINOv2 models.

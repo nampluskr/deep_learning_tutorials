@@ -14,7 +14,6 @@ from torch.nn import functional as F  # noqa: N812
 # from anomalib.data import InferenceBatch
 # from anomalib.models.components import DynamicBufferMixin, KCenterGreedy, TimmFeatureExtractor
 # from anomalib.utils import deprecate
-
 # from .anomaly_map import AnomalyMapGenerator
 
 from .components.feature_extractor import TimmFeatureExtractor

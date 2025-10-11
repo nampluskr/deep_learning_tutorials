@@ -26,9 +26,14 @@
 5. Feature Adaptation models:
   - [O] DFM(2019): "dfm"
   - [O] CFA(2022): "cfa"
+  
+6. Foundation models;
+  - [O] Supersimplenet(2024): "supersimplenet"
+  - [O] UniNet(2025): "uninet"
+  - [O] Dinomaly(2025): dinomaly-small/base/large-224/392/448
 """
 
-from train import train, train_models, set_globals, print_globals
+from train import train, train_models, set_globals
 
 if __name__ == "__main__":
 
@@ -47,10 +52,15 @@ if __name__ == "__main__":
         show_globals=True
     )
 
+
+    train("mvtec", "grid", "ganomaly")
+
+    # train("mvtec", "grid", "uninet")
+
     # train("mvtec", "grid", "fastflow")
-    train("mvtec", "grid", "fastflow-deit")
-    train("mvtec", "grid", "fastflow-cait")
-    # train_models(dataset_type="mvtec", categories=["grid"], models=["dinomaly-small-224", "dinomaly-small-448"])
+    # train("mvtec", "grid", "fastflow-deit")
+    # train("mvtec", "grid", "fastflow-cait")
+    # train_models(dataset_type="mvtec", categories=["grid"], models=["dinomaly-small-224", "dinomaly-small-392", "dinomaly-small-448"])
 
     # train("mvtec", "wood", "stfpm", num_epochs=20)
     # train("visa", "macaroni1", "stfpm", num_epochs=20)
@@ -67,4 +77,5 @@ if __name__ == "__main__":
     
     # train(["module1"], "tile", "stfpm", num_epochs=20)
     # train(["module1"], ["grid", "tile"], "stfpm", num_epochs=20)
+
 

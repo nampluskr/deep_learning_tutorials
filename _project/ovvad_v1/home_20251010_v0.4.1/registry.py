@@ -128,21 +128,25 @@ def register_all_models():
         dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"]),
         dict(num_epochs=1, batch_size=8, normalize=True, img_size=256)
     )
+    ModelRegistry.register("dfkde", "models.model_dfkde.DFKDETrainer",
+        dict(backbone="resnet50", layers=["layer4"], pre_trained=True),
+        dict(num_epochs=1, batch_size=8, normalize=True, img_size=256)
+    )
 
     #############################################################
     # 2. Nomalizing Flow-based: CFlow(2021), FastFlow(2021), CSFlow(2021), UFlow(2022)
     #############################################################
 
     ModelRegistry.register("cflow", "models.model_cflow.CflowTrainer",
-        dict(backbone="resnet18", layers=["layer1", "layer2", "layer3"]),
+        dict(backbone="resnet18", layers=["layer2", "layer3"]),
         dict(num_epochs=10, batch_size=4, normalize=True, img_size=256)
     )
     ModelRegistry.register("cflow-resnet18", "models.model_cflow.CflowTrainer",
-        dict(backbone="resnet18", layers=["layer1", "layer2", "layer3"]),
+        dict(backbone="resnet18", layers=["layer2", "layer3"]),
         dict(num_epochs=10, batch_size=4, normalize=True, img_size=256)
     )
-    ModelRegistry.register("cflow-resnot50", "models.model_cflow.CflowTrainer",
-        dict(backbone="resnet50", layers=["layer1", "layer2", "layer3"]),
+    ModelRegistry.register("cflow-resnet50", "models.model_cflow.CflowTrainer",
+        dict(backbone="resnet50", layers=["layer2", "layer3"]),
         dict(num_epochs=10, batch_size=4, normalize=True, img_size=256)
     )
     ModelRegistry.register("fastflow", "models.model_fastflow.FastflowTrainer",
@@ -200,16 +204,24 @@ def register_all_models():
     )
 
     #############################################################
-    # 4. Reconstruction-based: GANomaly(2018), DRAEM(2021), DSR(2022)
+    # 4. Reconstruction-based: Autoencoder(Baseline), GANomaly(2018), DRAEM(2021), DSR(2022)
     #############################################################
 
     ModelRegistry.register("autoencoder", "models.model_autoencoder.AutoencoderTrainer",
         dict(latent_dim=128),
         dict(num_epochs=50, batch_size=16, normalize=False, img_size=256)
     )
+    ModelRegistry.register("ganomaly", "models.model_ganomaly.GanomalyTrainer",
+        dict(input_size=(256, 256), n_features=64, latent_vec_size=256, gamma=0.01),
+        dict(num_epochs=50, batch_size=8, normalize=False, img_size=256)
+    )
     ModelRegistry.register("draem", "models.model_draem.DraemTrainer",
         dict(sspcab=True),
         dict(num_epochs=10, batch_size=8, normalize=False, img_size=256)
+    )
+    ModelRegistry.register("dsr", "models.model_dsr.DsrTrainer",
+        dict(latent_anomaly_strength=0.2, embedding_dim=128, num_embeddings=4096),
+        dict(num_epochs=50, batch_size=8, normalize=False, img_size=256)
     )
 
     #############################################################
@@ -269,6 +281,36 @@ def register_all_models():
     ModelRegistry.register("dinomaly-large-392", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
         dict(num_epochs=10, batch_size=6, normalize=True, img_size=392)
+    )
+
+    #############################################################
+    # 6. Foundation Models: Supersimplenet (2024)
+    #############################################################
+    # Unsupervised (기본)
+    ModelRegistry.register("supersimplenet", "models.model_supersimplenet.SupersimplenetTrainer",
+        dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"], supervised=False),
+        dict(num_epochs=100, batch_size=8, normalize=True, img_size=256)
+    )
+    # Supervised (label과 mask 모두 사용)
+    ModelRegistry.register("supersimplenet-supervised", "models.model_supersimplenet.SupersimplenetTrainer",
+        dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"], supervised=True),
+        dict(num_epochs=100, batch_size=8, normalize=True, img_size=256)
+    )
+    # ResNet18 백본 (빠른 학습용)
+    ModelRegistry.register("supersimplenet-resnet18", "models.model_supersimplenet.SupersimplenetTrainer",
+        dict(backbone="resnet18", layers=["layer2", "layer3"], supervised=False),
+        dict(num_epochs=100, batch_size=16, normalize=True, img_size=256)
+    )
+    #############################################################
+    # 6. Foundation Models: UniNet (2025)
+    #############################################################
+    ModelRegistry.register("uninet", "models.model_uninet.UniNetTrainer",
+        dict(student_backbone="wide_resnet50_2", teacher_backbone="wide_resnet50_2", temperature=0.1),
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=256)
+    )
+    ModelRegistry.register("uninet-resnet18", "models.model_uninet.UniNetTrainer",
+        dict(student_backbone="resnet18", teacher_backbone="resnet18", temperature=0.1),
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=256)
     )
 
 # Auto-register all models when module is imported
