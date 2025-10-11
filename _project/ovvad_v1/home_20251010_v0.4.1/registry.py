@@ -16,13 +16,13 @@ from models.components.trainer import EarlyStopper
 
 class ModelRegistry:
     """Register a new model configuration.
-    
+
     Args:
         model_type: Unique identifier for the model (e.g., "padim", "patchcore")
         trainer_path: Python path to the trainer class (e.g., "models.model_padim.PadimTrainer")
         model_config: Model-specific configuration (backbone, layers, etc.)
         train_config: Training configuration (epochs, batch_size, etc.)
-    
+
     Example:
         >>> ModelRegistry.register(
         ...     "padim",
@@ -50,7 +50,7 @@ class ModelRegistry:
                 f"Available models: {available}"
             )
         return cls._registry[model_type]
-    
+
     @classmethod
     def is_registered(cls, model_type: str) -> bool:
         return model_type in cls._registry
@@ -111,11 +111,11 @@ def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
 
 def register_all_models():
     """Register all available anomaly detection models.
-    
-    This function registers all implemented models with their default configurations. 
+
+    This function registers all implemented models with their default configurations.
     It should be called once at module import time.
     """
-    
+
     #############################################################
     # 1. Memory-based: PaDim(2020), PatchCore(2022), DFKDE(2022)
     #############################################################
@@ -213,7 +213,7 @@ def register_all_models():
     )
     ModelRegistry.register("ganomaly", "models.model_ganomaly.GanomalyTrainer",
         dict(input_size=(256, 256), n_features=64, latent_vec_size=256, gamma=0.01),
-        dict(num_epochs=50, batch_size=8, normalize=False, img_size=256)
+        dict(num_epochs=20, batch_size=8, normalize=False, img_size=256)
     )
     ModelRegistry.register("draem", "models.model_draem.DraemTrainer",
         dict(sspcab=True),
@@ -227,7 +227,7 @@ def register_all_models():
     #############################################################
     # 5. Feature Adaptation: DFM(2019), CFA(2022)
     #############################################################
-    
+
     ModelRegistry.register("dfm", "models.model_dfm.DFMTrainer",
         dict(backbone="resnet50", layer="layer3", score_type="fre"),
         dict(num_epochs=1, batch_size=16, normalize=True, img_size=256)
@@ -240,21 +240,8 @@ def register_all_models():
     #############################################################
     # 6. Foundation Models: Dinomaly (2025)
     #############################################################
-    
-    # ## 성능 우선
-    ModelRegistry.register("dinomaly-small-448", "models.model_dinomaly.DinomalyTrainer",
-        dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
-        dict(num_epochs=10, batch_size=16, normalize=True, img_size=448)
-    )
-    ModelRegistry.register("dinomaly-base-448", "models.model_dinomaly.DinomalyTrainer",
-        dict(encoder_name="dinov2_vit_base_14", bottleneck_dropout=0.2, decoder_depth=8),
-        dict(num_epochs=10, batch_size=8, normalize=True, img_size=448)
-    )
-    ModelRegistry.register("dinomaly-large-448", "models.model_dinomaly.DinomalyTrainer",
-        dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
-        dict(num_epochs=10, batch_size=4, normalize=True, img_size=448)
-    )
-    # ## 메모리 우선
+
+    # dinomaly-small/base/large (img_size = 224)
     ModelRegistry.register("dinomaly-small-224", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
         dict(num_epochs=15, batch_size=32, normalize=True, img_size=224)
@@ -267,50 +254,45 @@ def register_all_models():
         dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
         dict(num_epochs=15, batch_size=8, normalize=True, img_size=224)
     )
-    # Small - 빠른 프로토타이핑
+    # dinomaly-small/base/large (img_size = 392)
     ModelRegistry.register("dinomaly-small-392", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
         dict(num_epochs=10, batch_size=24, normalize=True, img_size=392)
     )
-    # Base - 실무 배포용
     ModelRegistry.register("dinomaly-base-392", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_base_14", bottleneck_dropout=0.2, decoder_depth=8),
         dict(num_epochs=10, batch_size=12, normalize=True, img_size=392)
     )
-    # Large - 최종 성능 검증
     ModelRegistry.register("dinomaly-large-392", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
         dict(num_epochs=10, batch_size=6, normalize=True, img_size=392)
     )
-
-    #############################################################
-    # 6. Foundation Models: Supersimplenet (2024)
-    #############################################################
-    # Unsupervised (기본)
+    # dinomaly-small/base/large (img_size = 448)
+    ModelRegistry.register("dinomaly-small-448", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=10, batch_size=16, normalize=True, img_size=448)
+    )
+    ModelRegistry.register("dinomaly-base-448", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_base_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=448)
+    )
+    ModelRegistry.register("dinomaly-large-448", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=10, batch_size=4, normalize=True, img_size=448)
+    )
+    # supersimplenet (supervised/unsupersived)
     ModelRegistry.register("supersimplenet", "models.model_supersimplenet.SupersimplenetTrainer",
         dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"], supervised=False),
-        dict(num_epochs=100, batch_size=8, normalize=True, img_size=256)
+        dict(num_epochs=50, batch_size=16, normalize=True, img_size=256)
     )
-    # Supervised (label과 mask 모두 사용)
     ModelRegistry.register("supersimplenet-supervised", "models.model_supersimplenet.SupersimplenetTrainer",
         dict(backbone="wide_resnet50_2", layers=["layer2", "layer3"], supervised=True),
-        dict(num_epochs=100, batch_size=8, normalize=True, img_size=256)
+        dict(num_epochs=50, batch_size=16, normalize=True, img_size=256)
     )
-    # ResNet18 백본 (빠른 학습용)
-    ModelRegistry.register("supersimplenet-resnet18", "models.model_supersimplenet.SupersimplenetTrainer",
-        dict(backbone="resnet18", layers=["layer2", "layer3"], supervised=False),
-        dict(num_epochs=100, batch_size=16, normalize=True, img_size=256)
-    )
-    #############################################################
-    # 6. Foundation Models: UniNet (2025)
-    #############################################################
+    # UniNet (temperature=0.5)
     ModelRegistry.register("uninet", "models.model_uninet.UniNetTrainer",
-        dict(student_backbone="wide_resnet50_2", teacher_backbone="wide_resnet50_2", temperature=0.1),
-        dict(num_epochs=10, batch_size=8, normalize=True, img_size=256)
-    )
-    ModelRegistry.register("uninet-resnet18", "models.model_uninet.UniNetTrainer",
-        dict(student_backbone="resnet18", teacher_backbone="resnet18", temperature=0.1),
-        dict(num_epochs=10, batch_size=8, normalize=True, img_size=256)
+        dict(student_backbone="wide_resnet50_2", teacher_backbone="wide_resnet50_2", temperature=0.4),
+        dict(num_epochs=20, batch_size=4, normalize=True, img_size=256)
     )
 
 # Auto-register all models when module is imported

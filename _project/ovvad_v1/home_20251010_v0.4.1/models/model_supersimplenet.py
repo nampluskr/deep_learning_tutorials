@@ -445,12 +445,10 @@ class SupersimplenetTrainer(BaseTrainer):
         if loss_fn is None:
             loss_fn = SSNLoss()
         if optimizer is None:
-            optimizer = torch.optim.AdamW(
-            [
+            optimizer = torch.optim.AdamW([
                 {"params": model.adaptor.parameters(), "lr": 0.0001},
                 {"params": model.segdec.parameters(), "lr": 0.0002, "weight_decay": 0.00001},
-            ],
-        )
+            ])
 
         super().__init__(model, optimizer, loss_fn, metrics, device,
                          scheduler, early_stopper_loss, early_stopper_auroc)
