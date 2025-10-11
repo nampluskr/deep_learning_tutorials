@@ -8,7 +8,7 @@ from torch import nn
 from torchvision.models.feature_extraction import create_feature_extractor
 from torch.fx.graph_module import GraphModule
 
-from .backbone import get_local_weight_path
+from .backbone import get_backbone_path
 
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class TimmFeatureExtractor(nn.Module):
             )
             self.out_dims = self.feature_extractor.feature_info.channels()
             if pre_trained:
-                weight_path = get_local_weight_path(backbone)
+                weight_path = get_backbone_path(backbone)
                 state_dict = torch.load(weight_path, map_location="cpu")
                 self.feature_extractor.load_state_dict(state_dict, strict=False)
         else:

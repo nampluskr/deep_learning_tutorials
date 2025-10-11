@@ -2,7 +2,7 @@
 from .model_base import (
     TimmFeatureExtractor,
     dryrun_find_featuremap_dims,
-    get_local_weight_path,
+    gat_backbone_path,
     load_backbone_weights,
     get_feature_extractor,
     BACKBONE_WEIGHT_FILES
@@ -38,7 +38,7 @@ __all__ = [
     # Base components
     "TimmFeatureExtractor",
     "dryrun_find_featuremap_dims", 
-    "get_local_weight_path",
+    "gat_backbone_path",
     "load_backbone_weights",
     "get_feature_extractor",
     "BACKBONE_WEIGHT_FILES",

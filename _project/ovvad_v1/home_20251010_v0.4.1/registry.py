@@ -229,17 +229,46 @@ def register_all_models():
     # 6. Foundation Models: Dinomaly (2025)
     #############################################################
     
-    ModelRegistry.register("dinomaly-small", "dinomaly.model_dinomaly.DinomalyTrainer",
+    # ## 성능 우선
+    ModelRegistry.register("dinomaly-small-448", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
-        dict(num_epochs=10, batch_size=16, normalize=True, img_size=224)
+        dict(num_epochs=10, batch_size=16, normalize=True, img_size=448)
     )
-    ModelRegistry.register("dinomaly-base", "dinomaly.model_dinomaly.DinomalyTrainer",
+    ModelRegistry.register("dinomaly-base-448", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_base_14", bottleneck_dropout=0.2, decoder_depth=8),
-        dict(num_epochs=10, batch_size=8, normalize=True, img_size=224)
+        dict(num_epochs=10, batch_size=8, normalize=True, img_size=448)
     )
-    ModelRegistry.register("dinomaly-large", "dinomaly.model_dinomaly.DinomalyTrainer",
+    ModelRegistry.register("dinomaly-large-448", "models.model_dinomaly.DinomalyTrainer",
         dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
-        dict(num_epochs=10, batch_size=4, normalize=True, img_size=224)
+        dict(num_epochs=10, batch_size=4, normalize=True, img_size=448)
+    )
+    # ## 메모리 우선
+    ModelRegistry.register("dinomaly-small-224", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=15, batch_size=32, normalize=True, img_size=224)
+    )
+    ModelRegistry.register("dinomaly-base-224", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_base_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=15, batch_size=16, normalize=True, img_size=224)
+    )
+    ModelRegistry.register("dinomaly-large-224", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=15, batch_size=8, normalize=True, img_size=224)
+    )
+    # Small - 빠른 프로토타이핑
+    ModelRegistry.register("dinomaly-small-392", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_small_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=10, batch_size=24, normalize=True, img_size=392)
+    )
+    # Base - 실무 배포용
+    ModelRegistry.register("dinomaly-base-392", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_base_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=10, batch_size=12, normalize=True, img_size=392)
+    )
+    # Large - 최종 성능 검증
+    ModelRegistry.register("dinomaly-large-392", "models.model_dinomaly.DinomalyTrainer",
+        dict(encoder_name="dinov2_vit_large_14", bottleneck_dropout=0.2, decoder_depth=8),
+        dict(num_epochs=10, batch_size=6, normalize=True, img_size=392)
     )
 
 # Auto-register all models when module is imported

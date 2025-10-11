@@ -45,7 +45,7 @@ def set_backbone_dir(path):
     BACKBONE_DIR = path
 
 
-def get_local_weight_path(backbone):
+def gat_backbone_path(backbone):
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
         return os.path.join(BACKBONE_DIR, filename)  # 전역 변수 사용
@@ -93,7 +93,7 @@ class TimmFeatureExtractor(nn.Module):
             self.idx = self._map_layer_to_idx()
 
             # 로컬 weight 경로
-            local_weights_path = get_local_weight_path(backbone)
+            local_weights_path = gat_backbone_path(backbone)
 
             # 모델 생성 (항상 pretrained=False)
             self.feature_extractor = timm.create_model(
@@ -160,7 +160,7 @@ class TimmFeatureExtractor(nn.Module):
 
 
 def load_backbone_weights(model_name, model):
-    weights_path = get_local_weight_path(model_name)
+    weights_path = gat_backbone_path(model_name)
 
     if os.path.exists(weights_path):
         state_dict = torch.load(weights_path, map_location='cpu')

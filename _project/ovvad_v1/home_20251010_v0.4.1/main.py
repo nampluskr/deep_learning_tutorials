@@ -47,7 +47,10 @@ if __name__ == "__main__":
         show_globals=True
     )
 
-    train_models(dataset_type="mvtec", categories=["grid"], models=["uflow"])
+    # train("mvtec", "grid", "fastflow")
+    train("mvtec", "grid", "fastflow-deit")
+    train("mvtec", "grid", "fastflow-cait")
+    # train_models(dataset_type="mvtec", categories=["grid"], models=["dinomaly-small-224", "dinomaly-small-448"])
 
     # train("mvtec", "wood", "stfpm", num_epochs=20)
     # train("visa", "macaroni1", "stfpm", num_epochs=20)
@@ -64,3 +67,4 @@ if __name__ == "__main__":
     
     # train(["module1"], "tile", "stfpm", num_epochs=20)
     # train(["module1"], ["grid", "tile"], "stfpm", num_epochs=20)
+

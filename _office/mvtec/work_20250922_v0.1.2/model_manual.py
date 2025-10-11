@@ -15,7 +15,7 @@ BACKBONE_WEIGHT_FILES = {
 }
 
 
-def get_local_weight_path(backbone: str) -> str:
+def gat_backbone_path(backbone: str) -> str:
     """Get local weight path for backbone model."""
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]

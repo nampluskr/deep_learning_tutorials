@@ -35,7 +35,7 @@ def set_backbone_dir(backbone_dir):
     print(f" > Backbone directory set to: {BACKBONE_DIR}")
 
 
-def get_local_weight_path(backbone: str):
+def get_backbone_path(backbone: str):
     if backbone.startswith("cait"):
         dirname = BACKBONE_WEIGHT_FILES.get(backbone, f"{backbone}.fb_dist_in1k")
         weight_path = os.path.join(BACKBONE_DIR, dirname, "model.safetensors")

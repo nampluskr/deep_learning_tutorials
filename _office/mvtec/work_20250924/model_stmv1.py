@@ -20,7 +20,7 @@ BACKBONE_WEIGHT_FILES = {
 }
 
 
-def get_local_weight_path(backbone: str) -> str:
+def gat_backbone_path(backbone: str) -> str:
     """Get local weight path for backbone model."""
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
@@ -186,8 +186,8 @@ class STMV1(nn.Module):
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.out_channels = out_channels
 
-        self.teacher_backbone_path = teacher_backbone_path or get_local_weight_path("efficientnet_b7")
-        self.student_backbone_path = student_backbone_path or get_local_weight_path("wide_resnet101_2")
+        self.teacher_backbone_path = teacher_backbone_path or gat_backbone_path("efficientnet_b7")
+        self.student_backbone_path = student_backbone_path or gat_backbone_path("wide_resnet101_2")
 
         # Initialize teacher and student networks
         self.teacher_net = TeacherEfficientNet(self.teacher_backbone_path, self.device)

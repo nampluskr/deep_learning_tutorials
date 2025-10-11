@@ -20,7 +20,7 @@ from torchvision.models.feature_extraction import create_feature_extractor
 
 from .components.blur import GaussianBlur2d
 from .components.dynamic_buffer import DynamicBufferMixin
-from .components.feature_extractor import dryrun_find_featuremap_dims, set_backbone_dir, get_local_weight_path
+from .components.feature_extractor import dryrun_find_featuremap_dims, set_backbone_dir, gat_backbone_path
 
 
 #####################################################################
@@ -121,7 +121,7 @@ def get_return_nodes(backbone: str) -> list[str]:
 # CVS-122673
 def get_feature_extractor(backbone: str, return_nodes: list[str]) -> GraphModule:
     model = getattr(torchvision.models, backbone)(weights=None)
-    weight_path = get_local_weight_path(backbone)
+    weight_path = gat_backbone_path(backbone)
     state_dict = torch.load(weight_path, map_location='cpu')
     model.load_state_dict(state_dict, strict=False)
 
