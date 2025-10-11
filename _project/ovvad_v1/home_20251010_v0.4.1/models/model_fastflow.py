@@ -23,7 +23,7 @@ from torch import nn
 from torch.nn import functional as F  # noqa: N812
 
 from .components.all_in_one_block import AllInOneBlock
-from .components.backbone import gat_backbone_path
+from .components.backbone import get_backbone_path
 
 
 #####################################################################
@@ -125,7 +125,7 @@ class FastflowModel(nn.Module):
             scales = [16]
 
             if pre_trained:
-                weight_path = gat_backbone_path(backbone)
+                weight_path = get_backbone_path(backbone)
                 if weight_path and os.path.isfile(weight_path):
                     from safetensors.torch import load_file
 
@@ -154,7 +154,7 @@ class FastflowModel(nn.Module):
                     ),
                 )
             if pre_trained:
-                weights_path = gat_backbone_path(backbone)
+                weights_path = get_backbone_path(backbone)
                 state_dict = torch.load(weights_path, map_location='cpu')
                 self.feature_extractor.load_state_dict(state_dict, strict=False)
         else:

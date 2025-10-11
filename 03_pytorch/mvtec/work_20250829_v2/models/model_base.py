@@ -30,7 +30,7 @@ BACKBONE_WEIGHT_FILES = {
 }
 
 
-def gat_backbone_path(backbone):
+def get_backbone_path(backbone):
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
         return os.path.join("backbones", filename)
@@ -74,7 +74,7 @@ class TimmFeatureExtractor(nn.Module):
             self.out_dims = [feature_info["num_features"] for layer_name, feature_info in layer_metadata.items()]
 
         elif isinstance(backbone, str):
-            local_weights_path = gat_backbone_path(backbone)
+            local_weights_path = get_backbone_path(backbone)
             self.idx = self._map_layer_to_idx()
             
             if os.path.exists(local_weights_path):
@@ -147,7 +147,7 @@ class TimmFeatureExtractor(nn.Module):
 
 
 def load_backbone_weights(model_name, model):
-    weights_path = gat_backbone_path(model_name)
+    weights_path = get_backbone_path(model_name)
     
     if os.path.exists(weights_path):
         state_dict = torch.load(weights_path, map_location='cpu')

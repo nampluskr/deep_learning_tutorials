@@ -15,7 +15,7 @@ BACKBONE_WEIGHT_FILES = {
 }
 
 
-def gat_backbone_path(backbone: str) -> str:
+def get_backbone_path(backbone: str) -> str:
     """Get local weight path for backbone model."""
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
@@ -35,7 +35,7 @@ class ResNet50FeatureExtractor(nn.Module):
         
         # Load pretrained weights
         if pretrained:
-            weight_path = gat_backbone_path("resnet50")
+            weight_path = get_backbone_path("resnet50")
             if os.path.exists(weight_path):
                 state_dict = torch.load(weight_path, map_location="cpu")
                 self.model.load_state_dict(state_dict)

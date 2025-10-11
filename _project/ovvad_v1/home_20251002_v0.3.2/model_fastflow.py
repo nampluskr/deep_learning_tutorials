@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from feature_extractor import gat_backbone_path
+from feature_extractor import get_backbone_path
 from all_in_one_block import AllInOneBlock
 from trainer import BaseTrainer
 
@@ -135,7 +135,7 @@ class FastFlow(nn.Module):
             raise ValueError(msg)
 
         if pre_trained:
-            weights_path = gat_backbone_path(backbone)
+            weights_path = get_backbone_path(backbone)
             state_dict = torch.load(weights_path, map_location='cpu')
             self.feature_extractor.load_state_dict(state_dict, strict=False)
 

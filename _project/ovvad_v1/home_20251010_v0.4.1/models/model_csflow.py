@@ -18,7 +18,7 @@ from FrEIA.framework import GraphINN, InputNode, Node, OutputNode
 from FrEIA.modules import InvertibleModule
 
 from .components.feature_extractor import TimmFeatureExtractor
-from .components.backbone import gat_backbone_path
+from .components.backbone import get_backbone_path
 
 
 #####################################################################
@@ -464,7 +464,7 @@ class CsFlowMultiScaleFeatureExtractor(nn.Module):
         self.input_size = input_size
 
         backbone = efficientnet_b5(weights=None)
-        weight_path = gat_backbone_path("efficientnet_b5")
+        weight_path = get_backbone_path("efficientnet_b5")
         state_dict = torch.load(weight_path, map_location="cpu")
         backbone.load_state_dict(state_dict, strict=False)
         self.feature_extractor = TimmFeatureExtractor(backbone=backbone, layers=["features.6.8"])

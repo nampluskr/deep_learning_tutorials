@@ -21,7 +21,7 @@ BACKBONE_WEIGHT_FILES = {
     "efficientnet_b5": "efficientnet_b5_lukemelas-1a07897c.pth",
 }
 
-def gat_backbone_path(backbone: str):
+def get_backbone_path(backbone: str):
     filename = BACKBONE_WEIGHT_FILES.get(backbone, f"{backbone}.pth")
     weight_path = os.path.join(BACKBONE_DIR, filename)
     if os.path.isfile(weight_path):
@@ -88,7 +88,7 @@ class TimmFeatureExtractor(nn.Module):
             )
             self.out_dims = self.feature_extractor.feature_info.channels()
             if pre_trained:
-                weight_path = gat_backbone_path(backbone)
+                weight_path = get_backbone_path(backbone)
                 state_dict = torch.load(weight_path, map_location="cpu")
                 self.feature_extractor.load_state_dict(state_dict, strict=False)
         else:
@@ -142,7 +142,7 @@ def load_pretrained_model(backbone, device="cpu"):
         raise ValueError(f"Unsupported backbone '{backbone}'. ")
     model.to(device)
 
-    weight_path = gat_backbone_path(backbone)
+    weight_path = get_backbone_path(backbone)
     state_dict = torch.load(weight_path, map_location=device)
     model.load_state_dict(state_dict, strict=False)
 

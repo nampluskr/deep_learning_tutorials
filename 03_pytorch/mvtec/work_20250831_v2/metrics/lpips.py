@@ -48,7 +48,7 @@ def set_backbone_dir(path):
     global BACKBONE_DIR
     BACKBONE_DIR = path
 
-def gat_backbone_path(model_name, weight_type="backbone"):
+def get_backbone_path(model_name, weight_type="backbone"):
     """Get local weight file path"""
     if weight_type == "lpips":
         if model_name in LPIPS_WEIGHT_FILES:
@@ -65,7 +65,7 @@ def gat_backbone_path(model_name, weight_type="backbone"):
 
 def load_backbone_weights(model, model_name):
     """Load local backbone weights if available"""
-    weights_path = gat_backbone_path(model_name, "backbone")
+    weights_path = get_backbone_path(model_name, "backbone")
     
     if os.path.exists(weights_path):
         try:
@@ -466,7 +466,7 @@ class LPIPS(nn.Module):
             if(pretrained):
                 if(model_path is None):
                     # Use local LPIPS weights from backbones folder
-                    model_path = gat_backbone_path(net, "lpips")
+                    model_path = get_backbone_path(net, "lpips")
 
                 if(verbose):
                     print('Loading LPIPS model from: %s' % os.path.basename(model_path))

@@ -14,7 +14,7 @@ BACKBONE_WEIGHT_FILES = {
 }
 
 
-def gat_backbone_path(backbone):
+def get_backbone_path(backbone):
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
         return os.path.join(BACKBONE_DIR, filename)
@@ -124,7 +124,7 @@ BACKBONE_WEIGHT_FILES = {
 }
 
 
-def gat_backbone_path(backbone):
+def get_backbone_path(backbone):
     if backbone in BACKBONE_WEIGHT_FILES:
         filename = BACKBONE_WEIGHT_FILES[backbone]
         return os.path.join(BACKBONE_DIR, filename)
@@ -191,7 +191,7 @@ class AutoEncoder(nn.Module):
             else:
                 raise ValueError(f"Unsupported backbone {backbone}")
 
-            weight_path = gat_backbone_path(backbone)
+            weight_path = get_backbone_path(backbone)
             if os.path.isfile(weight_path):
                 state = torch.load(weight_path, map_location="cpu", weights_only=True)
                 encoder.load_state_dict(state)

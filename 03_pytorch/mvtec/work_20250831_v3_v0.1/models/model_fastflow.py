@@ -18,7 +18,7 @@ except ImportError:
 # Import local flow components instead of anomalib
 from .flow_components import AllInOneBlock
 
-from .model_base import load_backbone_weights, gat_backbone_path
+from .model_base import load_backbone_weights, get_backbone_path
 
 
 class InferenceBatch(NamedTuple):

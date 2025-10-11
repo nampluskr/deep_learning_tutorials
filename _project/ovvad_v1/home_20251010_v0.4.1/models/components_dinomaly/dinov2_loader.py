@@ -31,7 +31,7 @@ import torch
 
 from .download import DownloadInfo, DownloadProgressBar
 from . import vision_transformer as dinov2_models
-from ..components.backbone import gat_backbone_path, BACKBONE_DIR
+from ..components.backbone import get_backbone_path, BACKBONE_DIR
 
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ class DinoV2Loader:
     #     model.load_state_dict(state_dict, strict=False)
         
     def _load_weights(self, model: torch.nn.Module, model_name: str) -> None:
-        weight_path = Path(gat_backbone_path(model_name))
+        weight_path = Path(get_backbone_path(model_name))
         if not weight_path.exists():
             if self.offline:
                 raise FileNotFoundError(
