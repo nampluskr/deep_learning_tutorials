@@ -1040,7 +1040,7 @@ import os
 from tqdm import tqdm
 from .components.trainer import BaseTrainer, EarlyStopper
 from .components.perlin import PerlinAnomalyGenerator
-from .components.backbone import BACKBONE_DIR
+from .components.backbone import get_backbone_dir
 
 
 class DsrTrainer(BaseTrainer):
@@ -1057,7 +1057,7 @@ class DsrTrainer(BaseTrainer):
                          scheduler, early_stopper_loss, early_stopper_auroc)
         self.eval_period = 5
 
-        self.backbone_dir = BACKBONE_DIR
+        self.backbone_dir = get_backbone_dir()
         self.upsampling_train_ratio = 0.7
         self.quantized_anomaly_generator = DsrAnomalyGenerator(p_anomalous=0.5)
         self.perlin_generator = PerlinAnomalyGenerator(

@@ -52,14 +52,14 @@ if __name__ == "__main__":
         show_globals=True
     )
 
-    train("mvtec", "tile", "uninet")
+    train("mvtec", "tile", "draem")
     # train("mvtec", "tile", "uninet-temp-0.2")
 
 
     # train("mvtec", "grid", "fastflow")
     # train("mvtec", "grid", "fastflow-deit")
     # train("mvtec", "grid", "fastflow-cait")
-    # train_models(dataset_type="mvtec", categories=["grid"], models=["dinomaly-small-224", "dinomaly-small-392", "dinomaly-small-448"])
+    # train_models(dataset_type="mvtec", categories=["grid", "tile", "wood"], models=["dinomaly-small-224"])
 
     # train("mvtec", "wood", "stfpm", num_epochs=20)
     # train("visa", "macaroni1", "stfpm", num_epochs=20)

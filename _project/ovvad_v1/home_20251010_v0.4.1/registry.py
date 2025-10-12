@@ -4,6 +4,28 @@ Model Registry for Anomaly Detection Framework
 This module provides a centralized registry for all anomaly detection models.
 Models can be registered with their configurations and retrieved by name.
 
+Categories:
+1. Memory-based (3): padim, patchcore, dfkde
+2. Normalizing Flow (9): cflow variants, fastflow variants, csflow, uflow variants
+3. Knowledge Distillation (6): stfpm, fre, reverse-distillation, efficientad variants
+4. Reconstruction (4): autoencoder, ganomaly, draem, dsr
+5. Feature Adaptation (2): dfm, cfa
+6. Foundation Models (12): dinomaly variants (9), supersimplenet (2), uninet (1)
+
+Classes:
+- ModelRegistry: Central registry for all models
+
+Functions:
+- register(): Register new model configuration
+- get(): Retrieve model configuration
+- is_registered(): Check if model is registered
+- list_models(): List all registered models
+- list_by_category(): List models by category
+- get_train_config(): Get training configuration
+- get_model_config(): Get model configuration
+- get_trainer(): Create trainer instance
+- register_all_models(): Register all available models (auto-called on import)
+
 Example:
     >>> from registry import ModelRegistry
     >>> config = ModelRegistry.get("padim")
@@ -12,6 +34,7 @@ Example:
 
 import os
 from models.components.trainer import EarlyStopper
+from dataloader import get_dataset_dir
 
 
 class ModelRegistry:
@@ -92,7 +115,23 @@ def get_model_config(model_type):
     return config["model_config"]
 
 
-def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
+def get_trainer(model_type, dataset_dir, img_size):
+    """Create trainer instance for specified model type
+    
+    Args:
+        model_type: Model identifier (e.g., "padim", "stfpm")
+        backbone_dir: Path to backbone weights directory
+        dataset_dir: Path to dataset directory
+        img_size: Input image size
+        
+    Returns:
+        Trainer instance (subclass of BaseTrainer)
+        
+    Note:
+        - Dynamically imports trainer class from models.model_xxx
+        - Auto-updates model_config with img_size and dtd_dir
+        - Returns initialized trainer ready for training
+    """
     config = ModelRegistry.get(model_type)
     module_path, class_name = config["trainer_path"].rsplit(".", 1)
     module = __import__(module_path, fromlist=[class_name])
@@ -103,8 +142,6 @@ def get_trainer(model_type, backbone_dir, dataset_dir, img_size):
         model_config['input_size'] = (img_size, img_size)
     if 'img_size' in model_config:
         model_config['img_size'] = img_size
-    if 'dtd_dir' in model_config:
-        model_config['dtd_dir'] = os.path.join(dataset_dir, "dtd")
 
     return TrainerClass(**model_config)
 
@@ -190,12 +227,13 @@ def register_all_models():
         dict(backbone="wide_resnet50_2", layers=["layer1", "layer2", "layer3"]),
         dict(num_epochs=50, batch_size=8, normalize=True, img_size=256)
     )
+
     ModelRegistry.register("efficientad-small", "models.model_efficientad.EfficientAdTrainer",
-        dict(model_size="small"),
+        dict(model_size="small", imagenet_dir=os.path.join(get_dataset_dir(), "imagenette2")),
         dict(num_epochs=20, batch_size=1, normalize=False, img_size=256)
     )
     ModelRegistry.register("efficientad-medium", "models.model_efficientad.EfficientAdTrainer",
-        dict(model_size="medium"),
+        dict(model_size="medium", imagenet_dir=os.path.join(get_dataset_dir(), "imagenette2")),
         dict(num_epochs=20, batch_size=1, normalize=False, img_size=256)
     )
     ModelRegistry.register("efficientad", "models.model_efficientad.EfficientAdTrainer",
@@ -216,7 +254,7 @@ def register_all_models():
         dict(num_epochs=20, batch_size=8, normalize=False, img_size=256)
     )
     ModelRegistry.register("draem", "models.model_draem.DraemTrainer",
-        dict(sspcab=True),
+        dict(sspcab=True, dtd_dir=os.path.join(get_dataset_dir(), "dtd")),
         dict(num_epochs=10, batch_size=8, normalize=False, img_size=256)
     )
     ModelRegistry.register("dsr", "models.model_dsr.DsrTrainer",

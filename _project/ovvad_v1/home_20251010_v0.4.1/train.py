@@ -1,10 +1,8 @@
 import os
 import torch
 
-from dataloader import get_dataloaders
-from registry import get_trainer, get_train_config
-from models.components.backbone import set_backbone_dir
-from dataloader import set_dataset_dir
+from models.components.backbone import set_backbone_dir, get_backbone_dir
+from dataloader import set_dataset_dir, get_dataset_dir
 
 
 #####################################################################
@@ -27,9 +25,9 @@ def set_globals(dataset_dir=None, backbone_dir=None, output_dir=None,
     global NUM_WORKERS, PIN_MEMORY, PERSISTENT_WORKERS
 
     if dataset_dir is not None:
-        DATASET_DIR = dataset_dir
+        DATASET_DIR = dataset_dir or get_dataset_dir()
     if backbone_dir is not None:
-        BACKBONE_DIR = backbone_dir
+        BACKBONE_DIR = backbone_dir or get_backbone_dir()
     if output_dir is not None:
         OUTPUT_DIR = output_dir
     if seed is not None:
@@ -97,6 +95,9 @@ def count_parameters(trainer):
 
 
 def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, img_size=None, normalize=None):
+    from registry import get_trainer, get_train_config
+    from dataloader import get_dataloaders
+
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()
@@ -147,7 +148,7 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
             persistent_workers=PERSISTENT_WORKERS
         )
 
-        trainer = get_trainer(model_type, backbone_dir=BACKBONE_DIR, dataset_dir=DATASET_DIR, img_size=img_size)
+        trainer = get_trainer(model_type, dataset_dir=DATASET_DIR, img_size=img_size)
         count_parameters(trainer)
         print_memory("After Model Creation")
 

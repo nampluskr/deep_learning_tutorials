@@ -1,6 +1,32 @@
-import os
+"""
+Backbone Weight Path Management
 
-BACKBONE_DIR = "/mnt/d/backbones"
+Global Variable:
+- BACKBONE_DIR: Directory containing pretrained backbone weights
+
+Dictionary:
+- BACKBONE_WEIGHT_FILES: Mapping of backbone names to weight filenames
+  * CNN backbones: resnet18, resnet50, wide_resnet50_2, efficientnet_b5
+  * Transformer backbones: dinov2_vit_*, cait_*, deit_*
+  
+Functions:
+- set_backbone_dir(backbone_dir): Update global BACKBONE_DIR
+- get_backbone_path(backbone): Get full path to backbone weight file
+  * Automatically handles different backbone types (CNN vs Transformer)
+  * Checks file existence and prints status
+  * Returns path for safetensors or .pth files depending on backbone type
+
+Example:
+    >>> from models.components.backbone import set_backbone_dir, get_backbone_path
+    >>> set_backbone_dir("/mnt/d/backbones")
+    >>> path = get_backbone_path("resnet50")
+    >>> # Returns: "/mnt/d/backbones/resnet50-0676ba61.pth"
+    >>>
+    >>> path = get_backbone_path("dinov2_vit_base_14")
+    >>> # Returns: "/mnt/d/backbones/dinov2_vitb14_pretrain.pth"
+"""
+
+import os
 
 BACKBONE_WEIGHT_FILES = {
     "resnet18": "resnet18-f37072fd.pth",
@@ -31,6 +57,10 @@ BACKBONE_WEIGHT_FILES = {
     "deit_base_distilled_patch16_384": "deit_base_distilled_patch16_384.fb_in1k",
 }
 
+BACKBONE_DIR = "/mnt/d/backbones"
+
+def get_backbone_dir():
+    return BACKBONE_DIR
 
 def set_backbone_dir(backbone_dir):
     global BACKBONE_DIR

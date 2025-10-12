@@ -432,6 +432,7 @@ class DecoderReconstructive(nn.Module):
 #############################################################
 # Trainer for DRAEM Model
 #############################################################
+import os
 from .components.trainer import BaseTrainer, EarlyStopper
 from .components.perlin import PerlinAnomalyGenerator
 
@@ -443,6 +444,9 @@ class DraemTrainer(BaseTrainer):
 
         if model is None:
             model = DraemModel(sspcab=sspcab)
+            if dtd_dir is None:
+                from dataloader import get_dataset_dir
+                dtd_dir = os.path.join(get_dataset_dir(), "dtd")
         if optimizer is None:
             optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
         if loss_fn is None:
@@ -458,7 +462,7 @@ class DraemTrainer(BaseTrainer):
                          scheduler, early_stopper_loss, early_stopper_auroc)
         self.eval_period = 5
 
-        self.dtd_dir = dtd_dir or "/mnt/d/datasets/dtd"
+        self.dtd_dir = dtd_dir
         self.augmenter = PerlinAnomalyGenerator(anomaly_source_path=self.dtd_dir, blend_factor=(0.1, 1.0))
         self.sspcab = sspcab
 

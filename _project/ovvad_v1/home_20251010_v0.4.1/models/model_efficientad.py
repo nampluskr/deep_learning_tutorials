@@ -334,21 +334,23 @@ from torchvision.datasets import ImageFolder
 from torchvision import transforms as T
 
 from .components.trainer import BaseTrainer, EarlyStopper
-from .components.backbone import BACKBONE_DIR
-
+from .components.backbone import get_backbone_dir
 
 class EfficientAdTrainer(BaseTrainer):
     def __init__(self, model=None, optimizer=None, loss_fn=None, metrics=None, device=None,
                  scheduler=None, early_stopper_loss=None, early_stopper_auroc=None,
-                 model_size="small"):
+                 model_size="small", imagenet_dir=None):
 
         if model is None:
             model = EfficientAdModel(teacher_out_channels=384,
                 model_size=EfficientAdModelSize.S if model_size == "small" else EfficientAdModelSize.M,
                 padding=False, pad_maps=True)
+            if imagenet_dir is None:
+                from dataloader import get_dataset_dir
+                imagenet_dir = os.path.join(get_dataset_dir(), "imagenette2")
         if optimizer is None:
             params = list(model.student.parameters()) + list(model.ae.parameters())
-            optimizer = torch.optim.Adam(params, lr=0.0001, weight_decay=0.00001)
+            optimizer = torch.optim.Adam(params, lr=1e-4, weight_decay=1e-5)
         if scheduler is None:
             self.scheduler_step_ratio = 0.95
             self.scheduler_gamma = 0.1
@@ -361,11 +363,13 @@ class EfficientAdTrainer(BaseTrainer):
                          scheduler, early_stopper_loss, early_stopper_auroc)
         self.eval_period = 5
 
+        self.imagenet_dir = imagenet_dir
+        self.backbone_dir = get_backbone_dir()
+
         self.model_size = model_size
         self.batch_size = 1
         self.imagenet_loader = None
         self.imagenet_iterator = None
-        self.backbone_dir = BACKBONE_DIR
 
     def prepare_pretrained_model(self) -> None:
         pretrained_models_dir = self.backbone_dir
@@ -388,11 +392,10 @@ class EfficientAdTrainer(BaseTrainer):
             T.CenterCrop((image_size[0], image_size[1])),
             T.ToTensor(),
         ])
-        imagenet_dir = os.path.join(self.backbone_dir, "imagenette2")
-        if not os.path.isdir(imagenet_dir):
-            raise RuntimeError(f" > Imagenette directory not found: {imagenet_dir}")
+        if not os.path.isdir(self.imagenet_dir):
+            raise RuntimeError(f" > Imagenette directory not found: {self.imagenet_dir}")
 
-        imagenet_dataset = ImageFolder(imagenet_dir, transform=self.data_transforms_imagenet)
+        imagenet_dataset = ImageFolder(self.imagenet_dir, transform=self.data_transforms_imagenet)
         self.imagenet_loader = DataLoader(imagenet_dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True)
         self.imagenet_iterator = iter(self.imagenet_loader)
 

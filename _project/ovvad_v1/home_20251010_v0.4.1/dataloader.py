@@ -10,20 +10,23 @@ from torchvision import transforms as T
 
 
 
-DATASET_DIR = "/mnt/d/backbones"
+DATASET_DIR = "/mnt/d/backbone"
+
+def get_dataset_dir():
+    return DATASET_DIR
 
 def set_dataset_dir(dataset_dir):
     global DATASET_DIR
     DATASET_DIR = dataset_dir
     print(f" > Dataset  directory set to: {DATASET_DIR}")
-    
-    
+
+
 #####################################################################
 # Base Dataset
 #####################################################################
 
 class BaseDataset(Dataset):
-    def __init__(self, dataset_dir, dataset_type, category, split="train", 
+    def __init__(self, dataset_dir, dataset_type, category, split="train",
                  transform=None, mask_transform=None, **kwargs):
         super().__init__()
         self.transform = transform

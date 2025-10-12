@@ -31,7 +31,7 @@ import torch
 
 from .download import DownloadInfo, DownloadProgressBar
 from . import vision_transformer as dinov2_models
-from ..components.backbone import get_backbone_path, BACKBONE_DIR
+from ..components.backbone import get_backbone_path, get_backbone_dir
 
 
 logger = logging.getLogger(__name__)
@@ -54,14 +54,14 @@ class DinoV2Loader:
         "large": {"embed_dim": 1024, "num_heads": 16},
     }
 
-    def __init__(self, cache_dir: str | Path = BACKBONE_DIR, offline: bool = True) -> None:
+    def __init__(self, cache_dir: str | Path = get_backbone_dir(), offline: bool = True) -> None:
         """
             cache_dir: Directory where the pre‑trained weights are stored.
             offline: If True, **never** try to download from the internet.
                      When a required file is missing an informative FileNotFoundError is raised.
         """
         if cache_dir is None:
-            cache_dir = BACKBONE_DIR
+            cache_dir = get_backbone_dir()
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.offline = offline
