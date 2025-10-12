@@ -49,12 +49,7 @@ import torch
 from registry import get_trainer
 
 # Initialize trainer
-trainer = get_trainer(
-    model_type="stfpm",
-    backbone_dir="/path/to/backbones",
-    dataset_dir="/path/to/datasets",
-    img_size=256
-)
+trainer = get_trainer(model_type="stfpm", img_size=256)
 
 # Load trained weights
 weight_path = "/path/to/outputs/mvtec/bottle/stfpm/model_mvtec_bottle_stfpm_epochs-50.pth"
@@ -107,7 +102,7 @@ from torchvision import transforms
 from registry import get_trainer
 
 # Load model
-trainer = get_trainer("stfpm", "/path/to/backbones", "/path/to/datasets", 256)
+trainer = get_trainer("stfpm", 256)
 trainer.load_model("/path/to/model.pth")
 trainer.model.eval()
 
@@ -368,12 +363,7 @@ from registry import get_trainer
 def main(args):
     # Load model
     print(f"Loading model: {args.model_type}")
-    trainer = get_trainer(
-        model_type=args.model_type,
-        backbone_dir=args.backbone_dir,
-        dataset_dir=args.dataset_dir,
-        img_size=args.img_size
-    )
+    trainer = get_trainer(model_type=args.model_type, img_size=args.img_size)
     trainer.load_model(args.weight_path)
     trainer.model.eval()
     
@@ -1037,7 +1027,7 @@ trainer = None
 def load_model():
     """Load model at startup"""
     global trainer
-    trainer = get_trainer("stfpm", "/path/to/backbones", "/path/to/datasets", 256)
+    trainer = get_trainer("stfpm", 256)
     trainer.load_model("/path/to/model.pth")
     trainer.model.eval()
     print("Model loaded successfully")
@@ -1122,7 +1112,7 @@ trainer = None
 async def startup_event():
     """Load model at startup"""
     global trainer
-    trainer = get_trainer("stfpm", "/path/to/backbones", "/path/to/datasets", 256)
+    trainer = get_trainer("stfpm", 256)
     trainer.load_model("/path/to/model.pth")
     trainer.model.eval()
     print("Model loaded successfully")
