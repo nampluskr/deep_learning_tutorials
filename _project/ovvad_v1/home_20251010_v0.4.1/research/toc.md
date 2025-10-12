@@ -1,5 +1,8 @@
 # PixelVision Research Documentation - 목차 구조
 
+- 블릿 사용을 하지 않고, 학술 리뷰 논문 형식으로 작성
+- 균형잡힌 길이와 일관된 형식으로 작성
+
 ## 파일 구조 및 넘버링
 
 ```
@@ -128,19 +131,10 @@ References
    6.4 Deployment Checklist
    6.5 Common Pitfalls
 
-7. Code Examples
-   7.1 PatchCore Implementation
-   7.2 Coreset Selection
-   7.3 Inference Pipeline
-
-8. Research Insights
-   8.1 Why Memory-Based Works
-   8.2 Theoretical Guarantees
-   8.3 Open Research Questions
-
-Appendix A: Mathematical Derivations
-Appendix B: Benchmark Results
-References
+7. Research Insights
+   7.1 Why Memory-Based Works
+   7.2 Theoretical Guarantees
+   7.3 Open Research Questions
 ```
 
 ---
@@ -205,19 +199,10 @@ References
    7.3 Training Strategies
    7.4 Deployment Considerations
 
-8. Code Examples
-   8.1 FastFlow Implementation
-   8.2 2D Flow Structure
-   8.3 Training Loop
-
-9. Research Insights
-   9.1 Why FastFlow Succeeded
-   9.2 Channel vs Spatial Information
-   9.3 Future Directions
-
-Appendix A: Flow Mathematics
-Appendix B: Benchmark Results
-References
+8. Research Insights
+   8.1 Why FastFlow Succeeded
+   8.2 Channel vs Spatial Information
+   8.3 Future Directions
 ```
 
 ---
@@ -294,19 +279,10 @@ References
    7.3 Hardware Considerations
    7.4 Deployment Strategies
 
-8. Code Examples
-   8.1 EfficientAD Implementation
-   8.2 PDN Architecture
-   8.3 Fast Inference Pipeline
-
-9. Research Insights
-   9.1 Knowledge Distillation Duality
-   9.2 The Middle Ground Trap
-   9.3 Revolutionary Optimization
-
-Appendix A: Distillation Mathematics
-Appendix B: Speed Benchmarks
-References
+8. Research Insights
+   8.1 Knowledge Distillation Duality
+   8.2 The Middle Ground Trap
+   8.3 Revolutionary Optimization
 ```
 
 ---
@@ -386,19 +362,10 @@ References
    7.4 Training Strategies
    7.5 Domain Adaptation
 
-8. Code Examples
-   8.1 DRAEM Implementation
-   8.2 Perlin Noise Generation
-   8.3 Few-shot Training Pipeline
-
-9. Research Insights
-   9.1 Supervised vs Unsupervised
-   9.2 Simulated Anomaly Effectiveness
-   9.3 GAN Instability Lessons
-
-Appendix A: Augmentation Techniques
-Appendix B: Few-shot Benchmarks
-References
+8. Research Insights
+   8.1 Supervised vs Unsupervised
+   8.2 Simulated Anomaly Effectiveness
+   8.3 GAN Instability Lessons
 ```
 
 ---
@@ -455,19 +422,10 @@ References
    6.3 Low-resource Environments
    6.4 Transition Strategy to SOTA Models
 
-7. Code Examples
-   7.1 DFM Implementation
-   7.2 15-Minute Baseline
-   7.3 PCA Feature Reduction
-
-8. Research Insights
-   8.1 Role as Entry Point
-   8.2 Starting Point, Not Destination
-   8.3 Value in Speed
-
-Appendix A: PCA Mathematics
-Appendix B: Quick Start Benchmarks
-References
+7. Research Insights
+   7.1 Role as Entry Point
+   7.2 Starting Point, Not Destination
+   7.3 Value in Speed
 ```
 
 ---
@@ -555,19 +513,10 @@ References
    9.3 VLM-AD for Quality Reports
    9.4 Migration Strategy
 
-10. Code Examples
-    10.1 Dinomaly Multi-class Setup
-    10.2 WinCLIP Prompt Design
-    10.3 VLM-AD API Integration
-
-11. Research Insights
-    11.1 Foundation Model Impact
-    11.2 Paradigm Transformation
-    11.3 Industry Implications
-
-Appendix A: Foundation Model Architectures
-Appendix B: Multi-class Benchmarks
-References
+10. Research Insights
+    10.1 Foundation Model Impact
+    10.2 Paradigm Transformation
+    10.3 Industry Implications
 ```
 
 ---
