@@ -115,7 +115,7 @@ def get_model_config(model_type):
     return config["model_config"]
 
 
-def get_trainer(model_type, dataset_dir, img_size):
+def get_trainer(model_type, img_size):
     """Create trainer instance for specified model type
     
     Args:

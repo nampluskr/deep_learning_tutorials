@@ -146,7 +146,7 @@ def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, 
             persistent_workers=PERSISTENT_WORKERS
         )
 
-        trainer = get_trainer(model_type, dataset_dir=DATASET_DIR, img_size=img_size)
+        trainer = get_trainer(model_type, img_size=img_size)
         count_parameters(trainer)
         print_memory("After Model Creation")
 
