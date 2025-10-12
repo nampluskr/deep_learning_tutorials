@@ -57,7 +57,7 @@ BACKBONE_WEIGHT_FILES = {
     "deit_base_distilled_patch16_384": "deit_base_distilled_patch16_384.fb_in1k",
 }
 
-BACKBONE_DIR = "/mnt/d/backbones"
+BACKBONE_DIR = ""   #"/mnt/d/backbones"
 
 def get_backbone_dir():
     return BACKBONE_DIR

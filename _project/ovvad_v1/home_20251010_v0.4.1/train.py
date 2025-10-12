@@ -2,7 +2,8 @@ import os
 import torch
 
 from models.components.backbone import set_backbone_dir, get_backbone_dir
-from dataloader import set_dataset_dir, get_dataset_dir
+from dataloader import set_dataset_dir, get_dataset_dir, get_dataloaders
+from registry import get_trainer, get_train_config
 
 
 #####################################################################
@@ -95,9 +96,6 @@ def count_parameters(trainer):
 
 
 def train(dataset_type, category, model_type, num_epochs=None, batch_size=None, img_size=None, normalize=None):
-    from registry import get_trainer, get_train_config
-    from dataloader import get_dataloaders
-
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()

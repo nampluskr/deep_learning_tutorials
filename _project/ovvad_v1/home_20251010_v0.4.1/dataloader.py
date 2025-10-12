@@ -10,7 +10,7 @@ from torchvision import transforms as T
 
 
 
-DATASET_DIR = "/mnt/d/backbone"
+DATASET_DIR = ""    # "/mnt/d/datasets"
 
 def get_dataset_dir():
     return DATASET_DIR
