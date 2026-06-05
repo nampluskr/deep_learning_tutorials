@@ -268,8 +268,9 @@ site:
 - PyTorch 중심으로 작성한다.
 - tutorial 코드는 학습 가능성과 가독성을 우선한다.
 - 실험 코드는 재현 가능성을 위해 seed, config, device 설정을 명시한다.
-- 필요한 경우 type hint를 사용한다.
-- 경로 처리는 `pathlib.Path`를 우선 사용한다.
+- type hint는 사용하지 않는다.
+- 경로 처리는 `pathlib.Path`를 사용하지 않고 `os.path`를 사용한다.
+- Python 코드 내 주석은 필요한 경우에만 작성하며, 영어로만 작성한다.
 
 **MUST NOT**
 - 과도한 추상화로 tutorial 흐름을 숨기지 않는다.
